@@ -8,7 +8,7 @@ Generates a customized RDP (Remote Desktop Protocol) file for the specified appl
 
 ## Authentication
 
-This endpoint requires authentication. Include the session cookie (`authToken`) in the request.
+This endpoint requires authentication. Include the session cookie (`rdweb_token`) in the request.
 
 ## Path Parameters
 
@@ -38,35 +38,40 @@ The generated RDP file includes the following configuration:
 remoteapplicationmode:i:1
 remoteapplicationname:s:{Application Name}
 remoteapplicationprogram:s:{rdpPath}
-alternate shell:s:{rdpPath}
 full address:s:{remoteServer}
-prompt for credentials:i:0
 username:s:{domain}\{username}
-authentication level:i:0
-gatewayusagemethod:i:1
+authentication level:i:3
 gatewayhostname:s:{gatewayServer}
+gatewayusagemethod:i:1
 gatewayprofileusagemethod:i:1
-public mode:i:{0 or 1}
+session timeout:i:{minutes * 60}
+redirectprinters:i:1
+redirectclipboard:i:1
 ```
 
 ### For Remote Desktop Sessions
 
 ```text
 screen mode id:i:2
+desktopwidth:i:1920
+desktopheight:i:1080
 full address:s:{remoteServer}
-prompt for credentials:i:0
 username:s:{domain}\{username}
-authentication level:i:0
-gatewayusagemethod:i:1
+authentication level:i:3
 gatewayhostname:s:{gatewayServer}
+gatewayusagemethod:i:1
 gatewayprofileusagemethod:i:1
-public mode:i:{0 or 1}
+remoteapplicationmode:i:0
+redirectprinters:i:1
+redirectclipboard:i:1
 ```
 
 <Info>
-  The `public mode:i:{0 or 1}` parameter is determined by the user's `privateMode` setting:
-  - `0` = Private mode (4-hour sessions)
-  - `1` = Public mode (20-minute sessions)
+  The `session timeout:i:{minutes * 60}` parameter is determined by the user's `privateMode` setting:
+  - 240 minutes (14,400 seconds) = Private mode
+  - 20 minutes (1,200 seconds) = Public mode
+  
+  Note: This parameter only appears in RemoteApp RDP files, not desktop sessions.
 </Info>
 
 <RequestExample>
@@ -74,7 +79,7 @@ public mode:i:{0 or 1}
 ```bash cURL
 curl --request GET \
   --url https://your-server.com/api/launch/MSWORD \
-  --cookie "authToken=your_session_token" \
+  --cookie "rdweb_token=your_jwt_token" \
   --output msword.rdp
 ```
 
@@ -101,7 +106,7 @@ import requests
 
 response = requests.get(
     'https://your-server.com/api/launch/MSWORD',
-    cookies={'authToken': 'your_session_token'}
+    cookies={'rdweb_token': 'your_jwt_token'}
 )
 
 if response.status_code == 200:
