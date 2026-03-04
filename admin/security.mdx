@@ -1,0 +1,538 @@
+---
+title: Security Best Practices
+description: Production security guidelines for RDSWeb Custom deployment
+---
+
+## Overview
+
+RDSWeb Custom handles authentication and application access for your Remote Desktop Services infrastructure. Proper security configuration is critical to protect your environment.
+
+This guide covers:
+- JWT token security
+- HTTPS/TLS configuration
+- CORS policies
+- Active Directory service account security
+- Network security
+
+## JWT Authentication
+
+### Secret Configuration
+
+The JWT secret is used to sign authentication tokens. Configure a strong secret in `.env`:
+
+```bash
+JWT_SECRET=your_very_long_random_secret_at_least_64_characters_long
+JWT_EXPIRES_IN=8h
+```
+
+<Warning>
+**Default Secret**: The default value `dev_secret_insecure_change_in_production` is insecure and must be changed before production deployment.
+
+See `backend/src/config.js:8`:
+```javascript
+secret: process.env.JWT_SECRET || 'dev_secret_insecure_change_in_production',
+```
+</Warning>
+
+### Generating a Secure Secret
+
+Use one of these methods:
+
+<CodeGroup>
+```bash Node.js
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+```
+
+```bash OpenSSL
+openssl rand -hex 64
+```
+
+```bash PowerShell
+[Convert]::ToBase64String((1..64 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 }))
+```
+</CodeGroup>
+
+### Token Expiration
+
+Configure token lifetime based on your security requirements:
+
+| Environment | Recommended Expiration |
+|-------------|------------------------|
+| Development | `12h` |
+| Production (internal) | `8h` |
+| Production (public) | `1h` |
+| High-security | `30m` |
+
+```bash
+JWT_EXPIRES_IN=8h  # 8 hours
+```
+
+### Token Storage
+
+The application uses HTTP-only cookies for token storage:
+
+<Accordion title="Why HTTP-only cookies?">
+- **XSS Protection**: JavaScript cannot access HTTP-only cookies
+- **CSRF Mitigation**: Combined with SameSite attribute
+- **Automatic Transmission**: Browser handles token submission
+
+See `backend/src/routes/auth.js` for implementation details.
+</Accordion>
+
+## HTTPS/TLS Configuration
+
+<Warning>
+**Production Requirement**: Always use HTTPS in production. Never transmit credentials over unencrypted HTTP.
+</Warning>
+
+### Reverse Proxy with TLS
+
+The recommended deployment uses a reverse proxy (IIS, Nginx, or Apache) to handle TLS:
+
+<Tabs>
+  <Tab title="IIS">
+    ```xml
+    <!-- web.config for IIS reverse proxy -->
+    <system.webServer>
+      <rewrite>
+        <rules>
+          <rule name="RDWeb Backend" stopProcessing="true">
+            <match url="(.*)" />
+            <action type="Rewrite" url="http://localhost:3000/{R:1}" />
+          </rule>
+        </rules>
+      </rewrite>
+      <httpProtocol>
+        <customHeaders>
+          <add name="Strict-Transport-Security" value="max-age=31536000; includeSubDomains" />
+        </customHeaders>
+      </httpProtocol>
+    </system.webServer>
+    ```
+  </Tab>
+  
+  <Tab title="Nginx">
+    ```nginx
+    server {
+        listen 443 ssl http2;
+        server_name rdweb.contoso.local;
+
+        ssl_certificate /etc/ssl/certs/rdweb.crt;
+        ssl_certificate_key /etc/ssl/private/rdweb.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+        location / {
+            proxy_pass http://localhost:3000;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Certificate Requirements
+
+- Use certificates from a trusted CA (not self-signed)
+- Ensure the certificate covers the hostname users access
+- Set certificate expiration monitoring
+- Use at least 2048-bit RSA or 256-bit ECC keys
+
+## CORS Configuration
+
+The backend restricts Cross-Origin Resource Sharing to trusted origins (see `backend/src/index.js:19-26`):
+
+```javascript
+app.use(
+    cors({
+        origin: ['http://localhost:4200', 'http://localhost:4300'],
+        credentials: true,
+        methods: ['GET', 'POST', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+    })
+);
+```
+
+### Production CORS Configuration
+
+Update the `origin` array for production:
+
+```javascript
+const allowedOrigins = process.env.CORS_ORIGINS 
+    ? process.env.CORS_ORIGINS.split(',') 
+    : ['https://rdweb.contoso.local'];
+
+app.use(
+    cors({
+        origin: allowedOrigins,
+        credentials: true,
+        methods: ['GET', 'POST', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+    })
+);
+```
+
+`.env` configuration:
+
+```bash
+CORS_ORIGINS=https://rdweb.contoso.local,https://rdweb-backup.contoso.local
+```
+
+<Warning>
+**Never use wildcard origins** (`*`) in production when `credentials: true`. This is a security risk.
+</Warning>
+
+## Security Headers (Helmet)
+
+The application uses [Helmet](https://helmetjs.github.io/) for security headers (see `backend/src/index.js:16`):
+
+```javascript
+app.use(helmet());
+```
+
+Helmet automatically sets:
+
+- `Strict-Transport-Security` - Enforces HTTPS
+- `X-Content-Type-Options: nosniff` - Prevents MIME type sniffing
+- `X-Frame-Options: SAMEORIGIN` - Prevents clickjacking
+- `X-XSS-Protection: 1; mode=block` - Enables XSS filter
+- Removes `X-Powered-By` header
+
+### Custom Helmet Configuration
+
+For advanced scenarios, customize Helmet:
+
+```javascript
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'"],
+            imgSrc: ["'self'", "data:"],
+        },
+    },
+    hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+    },
+}));
+```
+
+## Active Directory Service Account
+
+### Principle of Least Privilege
+
+The AD service account should have **minimal permissions**:
+
+<Accordion title="Recommended Permissions">
+- **Group**: Domain Users (default)
+- **Read Permissions**: Yes (default for domain users)
+- **Write Permissions**: No
+- **Admin Groups**: No (not Domain Admins, not Schema Admins)
+- **Delegation**: None
+- **Logon Rights**: Deny interactive logon
+</Accordion>
+
+### Account Configuration
+
+```powershell
+# Create service account with secure settings
+New-ADUser -Name "svc-rdweb" `
+    -SamAccountName "svc-rdweb" `
+    -UserPrincipalName "svc-rdweb@contoso.local" `
+    -Path "OU=Service Accounts,DC=contoso,DC=local" `
+    -AccountPassword (ConvertTo-SecureString "YourSecurePassword!" -AsPlainText -Force) `
+    -Enabled $true `
+    -PasswordNeverExpires $false `
+    -CannotChangePassword $false `
+    -Description "RDSWeb Custom LDAP Service Account"
+
+# Deny interactive logon (security best practice)
+$user = Get-ADUser svc-rdweb
+Set-ADUser $user -Replace @{"msDS-UserAccountDisabled"="True"}
+```
+
+### Password Policy
+
+- **Minimum Length**: 20 characters
+- **Complexity**: Uppercase, lowercase, numbers, symbols
+- **Rotation**: Every 90 days
+- **Storage**: Use a secrets management system (Azure Key Vault, HashiCorp Vault)
+- **Never**: Store in source control or share via email
+
+### Monitoring
+
+Enable AD audit logging for the service account:
+
+```powershell
+# Enable audit policy for logon events
+Auditpol /set /subcategory:"Logon" /success:enable /failure:enable
+
+# Monitor Event IDs:
+# 4624 - Successful logon
+# 4625 - Failed logon
+# 4768 - Kerberos TGT requested
+```
+
+## LDAP Security
+
+### Use LDAPS (LDAP over TLS)
+
+```bash
+LDAP_URL=ldaps://dc01.contoso.local:636
+```
+
+### Enable Certificate Validation
+
+Edit `backend/src/services/adService.js:107` to enable certificate validation:
+
+```javascript
+const adOptions = {
+    ldapOpts: {
+        url: config.ldap.url,
+        tlsOptions: { 
+            rejectUnauthorized: true,  // CRITICAL: Set to true in production
+            ca: [fs.readFileSync('/etc/ssl/certs/ca-cert.pem')]
+        },
+    },
+    // ...
+};
+```
+
+<Warning>
+The default setting `rejectUnauthorized: false` is insecure and should only be used in development.
+</Warning>
+
+## Network Security
+
+### Firewall Rules
+
+Restrict access to the backend server:
+
+| Port | Protocol | Source | Purpose |
+|------|----------|--------|----------|
+| 3000 | TCP | Reverse Proxy | Backend API (internal only) |
+| 443 | TCP | User Network | HTTPS (reverse proxy) |
+| 389 | TCP | Backend Server | LDAP to Domain Controller |
+| 636 | TCP | Backend Server | LDAPS to Domain Controller |
+| 135, 445, 49152+ | TCP | Backend Server | WMI to RD Connection Broker |
+
+### Network Segmentation
+
+Deploy in a segmented architecture:
+
+```
+┌─────────────────┐
+│   Users (DMZ)   │
+└────────┬────────┘
+         │ HTTPS (443)
+         ▼
+┌─────────────────┐
+│  Reverse Proxy  │
+└────────┬────────┘
+         │ HTTP (3000, internal)
+         ▼
+┌─────────────────┐
+│  Backend (Node) │
+└────────┬────────┘
+         │ LDAPS (636), WMI (135)
+         ▼
+┌─────────────────┐
+│  AD / RDCB      │
+└─────────────────┘
+```
+
+## Environment Variables Security
+
+### Never Commit `.env` Files
+
+Add to `.gitignore`:
+
+```gitignore
+.env
+.env.local
+.env.production
+*.env
+```
+
+### Use Secrets Management
+
+For production, use a secrets management system:
+
+<Tabs>
+  <Tab title="Azure Key Vault">
+    ```javascript
+    const { DefaultAzureCredential } = require('@azure/identity');
+    const { SecretClient } = require('@azure/keyvault-secrets');
+
+    const credential = new DefaultAzureCredential();
+    const client = new SecretClient('https://your-vault.vault.azure.net', credential);
+
+    const jwtSecret = await client.getSecret('JWT-SECRET');
+    const adPassword = await client.getSecret('AD-SERVICE-PASS');
+    ```
+  </Tab>
+  
+  <Tab title="HashiCorp Vault">
+    ```javascript
+    const vault = require('node-vault')({
+        endpoint: 'https://vault.contoso.local:8200',
+        token: process.env.VAULT_TOKEN
+    });
+
+    const secrets = await vault.read('secret/data/rdweb');
+    const jwtSecret = secrets.data.data.JWT_SECRET;
+    ```
+  </Tab>
+</Tabs>
+
+## Logging and Monitoring
+
+### Enable Audit Logging
+
+Log security-relevant events:
+
+```javascript
+// backend/src/middleware/auditLogger.js
+const winston = require('winston');
+
+const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.json(),
+    transports: [
+        new winston.transports.File({ filename: 'audit.log' })
+    ]
+});
+
+function auditLog(event, user, details) {
+    logger.info({
+        timestamp: new Date().toISOString(),
+        event,
+        user: user?.username || 'anonymous',
+        ip: details.ip,
+        userAgent: details.userAgent,
+        details
+    });
+}
+
+module.exports = { auditLog };
+```
+
+### Events to Log
+
+- Authentication attempts (success and failure)
+- Application access requests
+- Configuration changes
+- Service account usage
+- Errors and exceptions
+
+## Security Checklist
+
+<Steps>
+  <Step title="JWT Secret">
+    ✅ Generate a secure JWT secret (64+ characters)
+    
+    ✅ Store in environment variables or secrets manager
+    
+    ✅ Never commit to source control
+  </Step>
+  
+  <Step title="HTTPS/TLS">
+    ✅ Enable HTTPS with valid certificates
+    
+    ✅ Use TLS 1.2 or higher
+    
+    ✅ Enable HSTS headers
+  </Step>
+  
+  <Step title="CORS Configuration">
+    ✅ Set specific allowed origins (no wildcards)
+    
+    ✅ Update for production domains
+    
+    ✅ Enable credentials only for trusted origins
+  </Step>
+  
+  <Step title="AD Service Account">
+    ✅ Create dedicated service account (not a user account)
+    
+    ✅ Grant read-only permissions
+    
+    ✅ Use strong password (20+ characters)
+    
+    ✅ Enable password rotation (90 days)
+    
+    ✅ Deny interactive logon
+  </Step>
+  
+  <Step title="LDAP Security">
+    ✅ Use LDAPS (port 636)
+    
+    ✅ Enable certificate validation
+    
+    ✅ Install CA certificates on Node.js server
+  </Step>
+  
+  <Step title="Network Security">
+    ✅ Configure firewall rules (minimal ports)
+    
+    ✅ Segment networks (DMZ, internal)
+    
+    ✅ Restrict WMI access to backend server
+  </Step>
+  
+  <Step title="Monitoring">
+    ✅ Enable audit logging
+    
+    ✅ Monitor authentication failures
+    
+    ✅ Set up alerts for suspicious activity
+  </Step>
+  
+  <Step title="Simulation Mode">
+    ✅ Disable in production (`SIMULATION_MODE=false`)
+    
+    ✅ Verify with health endpoint
+  </Step>
+</Steps>
+
+## Compliance Considerations
+
+### GDPR / Data Protection
+
+- Log only necessary user data
+- Implement data retention policies
+- Provide user data export capabilities
+- Document data processing activities
+
+### Industry Standards
+
+- **NIST Cybersecurity Framework**: Implement identity and access management controls
+- **CIS Controls**: Follow endpoint and network security guidelines
+- **ISO 27001**: Maintain information security management system
+
+## Incident Response
+
+Prepare an incident response plan:
+
+1. **Detection**: Monitor logs for suspicious activity
+2. **Containment**: Disable compromised service accounts
+3. **Eradication**: Rotate JWT secrets, change passwords
+4. **Recovery**: Restore from known-good backups
+5. **Lessons Learned**: Update security controls
+
+## Related Pages
+
+- [Active Directory Setup](/admin/active-directory) - Configure LDAP authentication
+- [RD Connection Broker](/admin/rd-connection-broker) - WMI security considerations
+- [Simulation Mode](/admin/simulation-mode) - Never use in production

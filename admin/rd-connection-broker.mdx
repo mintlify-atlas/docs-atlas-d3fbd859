@@ -1,0 +1,247 @@
+---
+title: RD Connection Broker Integration
+description: Configure PowerShell and WMI integration with Remote Desktop Connection Broker
+---
+
+## Overview
+
+RDSWeb Custom queries the **RD Connection Broker** to retrieve published RemoteApps and desktops for authenticated users. This is done via PowerShell and WMI (Windows Management Instrumentation).
+
+## How It Works
+
+When a user logs in, the backend:
+
+1. Authenticates the user against Active Directory
+2. Executes a PowerShell script to query the RD Connection Broker
+3. Retrieves published applications using the `Win32_TSPublishedApplication` WMI class
+4. Returns the application list to the frontend
+
+## Configuration
+
+Set the RD Connection Broker server in your `.env` file:
+
+```bash
+RDCB_SERVER=SRV-APPS.LAB-MH.LOCAL
+```
+
+<ParamField path="RDCB_SERVER" type="string" required>
+  Fully qualified domain name (FQDN) of the RD Connection Broker server.
+  
+  **Example**: `rdcb.contoso.local`
+</ParamField>
+
+## PowerShell Query
+
+The backend executes this PowerShell command (see `backend/src/services/rdcbService.js:84-90`):
+
+```powershell
+$apps = Get-WmiObject -Namespace "root\cimv2\TerminalServices" `
+  -Class Win32_TSPublishedApplication `
+  -ComputerName "SRV-APPS.LAB-MH.LOCAL" |
+  Select-Object -Property Name, Alias, VPath, IconPath, FolderName
+
+$apps | ConvertTo-Json -Compress
+```
+
+### WMI Class: `Win32_TSPublishedApplication`
+
+This WMI class exposes published RemoteApps with the following properties:
+
+| Property | Description | Example |
+|----------|-------------|--------|
+| `Name` | Application display name | `Microsoft Word 2019` |
+| `Alias` | Internal application alias | `MSWORD` |
+| `VPath` | Virtual path (launch path) | `\|\|MSWORD` |
+| `IconPath` | Path to the application icon | `C:\Program Files\...` |
+| `FolderName` | Organizational folder | `Microsoft Office` |
+
+## Required Permissions
+
+The **Node.js backend service account** (the Windows user running the Node process) needs these permissions:
+
+### 1. WMI Namespace Permissions
+
+Grant **Read** access to the `root\cimv2\TerminalServices` namespace:
+
+1. Open **Computer Management** on the RD Connection Broker server
+2. Navigate to **Services and Applications > WMI Control**
+3. Right-click **WMI Control** > **Properties**
+4. Go to the **Security** tab
+5. Expand **Root** > **CIMV2** > **TerminalServices**
+6. Click **Security**
+7. Add the service account and grant:
+   - **Enable Account**
+   - **Remote Enable**
+   - **Read Security**
+
+### 2. DCOM Permissions
+
+Enable remote DCOM access:
+
+1. Run `dcomcnfg.exe` on the RD Connection Broker
+2. Navigate to **Component Services > Computers > My Computer**
+3. Right-click **My Computer** > **Properties**
+4. Go to the **COM Security** tab
+5. Under **Access Permissions**, click **Edit Limits**
+6. Add the service account and grant **Remote Access**
+7. Under **Launch and Activation Permissions**, click **Edit Limits**
+8. Add the service account and grant **Remote Launch** and **Remote Activation**
+
+### 3. Firewall Rules
+
+Allow WMI through Windows Firewall:
+
+```powershell
+# On the RD Connection Broker server
+Enable-NetFirewallRule -DisplayGroup "Windows Management Instrumentation (WMI)"
+```
+
+Or manually enable these rules:
+- **WMI (DCOM-In)**
+- **WMI (WMI-In)**
+
+### 4. Local Security Policy
+
+Ensure the service account is in one of these groups on the RDCB server:
+- **Distributed COM Users**
+- **Remote Management Users**
+
+## Application Mapping
+
+The service maps WMI data to the frontend format (see `backend/src/services/rdcbService.js:98-105`):
+
+```javascript
+const apps = appsArray.map((a) => ({
+    alias: a.Alias,                  // Internal identifier
+    name: a.Name,                    // Display name
+    rdpPath: `||${a.Alias}`,         // RDP launch path
+    iconIndex: 0,                    // Icon index (future use)
+    remoteServer: config.rdcb.server, // RDCB FQDN
+    folderName: a.FolderName || 'Aplicaciones', // Category
+}));
+```
+
+## Testing the Integration
+
+Test PowerShell WMI access from the Node.js server:
+
+```powershell
+# Run this on the Node.js backend server
+$apps = Get-WmiObject -Namespace "root\cimv2\TerminalServices" `
+  -Class Win32_TSPublishedApplication `
+  -ComputerName "SRV-APPS.LAB-MH.LOCAL"
+
+$apps | Select-Object Name, Alias, FolderName | Format-Table
+```
+
+If successful, you should see a list of published RemoteApps.
+
+## Error Handling
+
+### Error: "No se pudo contactar al RD Connection Broker"
+
+This error occurs when the WMI query fails. Common causes:
+
+1. **Network Connectivity**: Verify the RDCB server is reachable
+   ```bash
+   ping SRV-APPS.LAB-MH.LOCAL
+   ```
+
+2. **WMI Permissions**: Check the service account has WMI access (see [Required Permissions](#required-permissions))
+
+3. **Firewall Rules**: Ensure WMI traffic is allowed
+
+4. **PowerShell Execution Policy**: Verify the backend server allows script execution
+   ```powershell
+   Get-ExecutionPolicy
+   # Should be RemoteSigned or Unrestricted
+   ```
+
+### Timeout Issues
+
+The WMI query has a 10-second timeout (see `backend/src/services/rdcbService.js:93`):
+
+```javascript
+execSync(`powershell -NonInteractive -Command "..."`, {
+    encoding: 'utf8',
+    timeout: 10000  // 10 seconds
+});
+```
+
+If queries consistently timeout:
+- Check network latency to the RDCB server
+- Reduce the number of published apps
+- Consider caching the application list
+
+## RD Gateway Configuration
+
+If users connect through an RD Gateway, configure it in `.env`:
+
+```bash
+RDGATEWAY_HOSTNAME=rdgateway.lab-mh.local
+```
+
+This hostname is included in the RDP file generation (see frontend implementation).
+
+## Advanced: Remote Desktop Collections
+
+For querying Remote Desktop collections (session-based desktops), use:
+
+```powershell
+$collections = Get-WmiObject -Namespace "root\cimv2\TerminalServices" `
+  -Class Win32_RDSHCollection `
+  -ComputerName "SRV-APPS.LAB-MH.LOCAL"
+
+$collections | Select-Object Name, Description | Format-Table
+```
+
+<Info>
+The current implementation in `rdcbService.js:56-64` includes a `SIMULATED_DESKTOPS` array for desktop resources. You can extend the `getAppsForUser` function to query real desktop collections.
+</Info>
+
+## Security Considerations
+
+<Warning>
+**Least Privilege Principle**: The backend service account should have **read-only** access to WMI. Do not grant administrative privileges.
+</Warning>
+
+### Recommendations
+
+1. **Dedicated Service Account**: Use a separate account for WMI queries (not the AD service account)
+2. **Audit Logging**: Enable WMI access logging on the RDCB server
+3. **Network Segmentation**: Restrict WMI access to specific source IPs
+4. **Regular Review**: Audit the service account permissions quarterly
+
+## Deployment Checklist
+
+<Steps>
+  <Step title="Create Service Account">
+    Create a dedicated Windows user for the Node.js backend service
+  </Step>
+  
+  <Step title="Grant WMI Permissions">
+    Configure WMI namespace and DCOM permissions (see above)
+  </Step>
+  
+  <Step title="Configure Firewall">
+    Allow WMI traffic from the Node.js server to the RDCB server
+  </Step>
+  
+  <Step title="Test Connectivity">
+    Run the PowerShell test query from the Node.js server
+  </Step>
+  
+  <Step title="Update .env">
+    Set `RDCB_SERVER` to the Connection Broker FQDN
+  </Step>
+  
+  <Step title="Restart Backend">
+    Restart the Node.js service and check logs
+  </Step>
+</Steps>
+
+## Related Pages
+
+- [Active Directory Setup](/admin/active-directory) - User authentication configuration
+- [Security Best Practices](/admin/security) - Secure your deployment
+- [Simulation Mode](/admin/simulation-mode) - Test without a real RDCB

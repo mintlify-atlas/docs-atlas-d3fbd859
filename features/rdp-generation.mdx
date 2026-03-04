@@ -1,0 +1,474 @@
+---
+title: RDP File Generation
+description: Understanding how RDSWeb Custom generates RDP files for RemoteApp and desktop sessions
+---
+
+## Overview
+
+RDP (Remote Desktop Protocol) files are configuration files that tell the Microsoft Remote Desktop client how to connect to a RemoteApp or desktop session. RDSWeb Custom dynamically generates these files with user-specific settings, gateway configuration, and security parameters.
+
+## RDP File Format
+
+RDP files use a simple key-value format:
+
+```
+screen mode id:i:1
+full address:s:SRV-APPS.LAB-MH.LOCAL
+username:s:LAB-MH\juan.perez
+remoteapplicationmode:i:1
+remoteapplicationname:s:Microsoft Word 2019
+```
+
+**Format rules:**
+- Each line: `key:type:value`
+- Types: `i` (integer), `s` (string), `b` (binary)
+- Line endings: `\r\n` (Windows CRLF)
+
+## RemoteApp RDP Generation
+
+When a user clicks on an application, RDSWeb Custom generates a custom RDP file:
+
+```javascript
+function generateRemoteAppRdp(app, user, isPrivate = true) {
+  const domain = user.domain || 'LAB-MH';
+  const username = `${domain}\\${user.username}`;
+  const sessionTimeout = isPrivate ? 240 : 20;
+
+  return [
+    // Display settings
+    'screen mode id:i:1',           // Windowed mode
+    'desktopwidth:i:1024',
+    'desktopheight:i:768',
+    'session bpp:i:32',             // Color depth (32-bit)
+    
+    // Server connection
+    `full address:s:${app.remoteServer}`,
+    
+    // RD Gateway configuration
+    `gatewayhostname:s:${config.rdGateway.hostname}`,
+    'gatewayusagemethod:i:1',       // Use gateway
+    'gatewaycredentialssource:i:4', // Use same credentials
+    
+    // Authentication
+    `username:s:${username}`,
+    'authentication level:i:3',     // Require NLA
+    
+    // RemoteApp configuration
+    'remoteapplicationmode:i:1',    // Enable RemoteApp mode
+    `remoteapplicationname:s:${app.name}`,
+    `remoteapplicationprogram:s:${app.rdpPath}`,
+    
+    // Redirections
+    'redirectprinters:i:1',
+    'redirectclipboard:i:1',
+    'redirectdrives:i:0',           // Security: disable drive redirection
+    
+    // Session timeout
+    `session timeout:i:${sessionTimeout * 60}`,
+    'autoreconnection enabled:i:1'
+  ].join('\r\n');
+}
+```
+
+### Example Generated File
+
+```rdp
+screen mode id:i:1
+use multimon:i:0
+desktopwidth:i:1024
+desktopheight:i:768
+session bpp:i:32
+winposstr:s:0,1,0,0,800,600
+compression:i:1
+keyboardhook:i:2
+audiocapturemode:i:0
+videoplaybackmode:i:1
+connection type:i:7
+networkautodetect:i:1
+bandwidthautodetect:i:1
+displayconnectionbar:i:1
+enableworkspacereconnect:i:0
+disable wallpaper:i:0
+allow font smoothing:i:0
+allow desktop composition:i:0
+disable full window drag:i:1
+disable menu anims:i:1
+disable themes:i:0
+disable cursor setting:i:0
+bitmapcachepersistenable:i:1
+full address:s:SRV-APPS.LAB-MH.LOCAL
+gatewayhostname:s:rdgateway.lab-mh.local
+gatewayusagemethod:i:1
+gatewaycredentialssource:i:4
+gatewayprofileusagemethod:i:1
+promptcredentialonce:i:0
+username:s:LAB-MH\juan.perez
+authentication level:i:3
+remoteapplicationmode:i:1
+remoteapplicationname:s:Microsoft Word 2019
+remoteapplicationprogram:s:||MSWORD
+remoteapplicationcmdline:s:
+redirectprinters:i:1
+redirectclipboard:i:1
+redirectsmartcards:i:0
+redirectdrives:i:0
+redirectposdevices:i:0
+session timeout:i:14400
+autoreconnection enabled:i:1
+```
+
+## Desktop RDP Generation
+
+For full desktop sessions, the configuration differs:
+
+```javascript
+function generateDesktopRdp(desktop, user) {
+  const domain = user.domain || 'LAB-MH';
+  const username = `${domain}\\${user.username}`;
+
+  return [
+    // Full screen mode
+    'screen mode id:i:2',           // Full screen
+    'desktopwidth:i:1920',
+    'desktopheight:i:1080',
+    'session bpp:i:32',
+    
+    // Server connection
+    `full address:s:${desktop.remoteServer}`,
+    
+    // Gateway
+    `gatewayhostname:s:${config.rdGateway.hostname}`,
+    'gatewayusagemethod:i:1',
+    'gatewaycredentialssource:i:4',
+    
+    // Authentication
+    `username:s:${username}`,
+    'authentication level:i:3',
+    
+    // Desktop mode (not RemoteApp)
+    'remoteapplicationmode:i:0',
+    
+    // Redirections (more permissive for desktop)
+    'redirectprinters:i:1',
+    'redirectclipboard:i:1',
+    'redirectdrives:i:0',
+    'autoreconnection enabled:i:1'
+  ].join('\r\n');
+}
+```
+
+## Key Configuration Parameters
+
+### Display Settings
+
+| Parameter | RemoteApp | Desktop | Description |
+|-----------|-----------|---------|-------------|
+| `screen mode id` | `1` | `2` | 1=Windowed, 2=Full screen |
+| `desktopwidth` | 1024 | 1920 | Window/screen width |
+| `desktopheight` | 768 | 1080 | Window/screen height |
+| `session bpp` | 32 | 32 | Color depth (bits per pixel) |
+
+### Connection Settings
+
+```rdp
+full address:s:SRV-APPS.LAB-MH.LOCAL    # RD Session Host or Collection
+connection type:i:7                      # Auto-detect connection quality
+networkautodetect:i:1                    # Enable network auto-detection
+bandwidthautodetect:i:1                  # Auto-detect bandwidth
+```
+
+### RD Gateway Configuration
+
+```rdp
+gatewayhostname:s:rdgateway.lab-mh.local  # Gateway server FQDN
+gatewayusagemethod:i:1                     # Always use gateway
+gatewaycredentialssource:i:4               # Use RD Gateway credentials
+gatewayprofileusagemethod:i:1              # Use default profile
+```
+
+**Gateway Usage Methods:**
+- `0` - Do not use gateway
+- `1` - Always use gateway
+- `2` - Use gateway if direct connection fails
+- `3` - Use default gateway settings
+- `4` - Do not use gateway (bypass for local)
+
+### Authentication
+
+```rdp
+username:s:LAB-MH\juan.perez      # Pre-filled username
+authentication level:i:3           # Always require NLA
+promptcredentialonce:i:0           # Prompt for password
+```
+
+**Authentication Levels:**
+- `0` - No authentication required (insecure)
+- `1` - Server authentication required
+- `2` - Server authentication attempted
+- `3` - Server authentication required with NLA (most secure)
+
+### RemoteApp Configuration
+
+```rdp
+remoteapplicationmode:i:1                      # 1=RemoteApp, 0=Desktop
+remoteapplicationname:s:Microsoft Word 2019    # Display name
+remoteapplicationprogram:s:||MSWORD            # Application alias
+remoteapplicationcmdline:s:                    # Command-line arguments (optional)
+```
+
+**Application Path Format:**
+- `||ALIAS` - Published RemoteApp (via RDCB)
+- `C:\Program Files\...` - Direct executable path
+- `%ProgramFiles%\...` - Environment variable expansion
+
+### Resource Redirection
+
+```rdp
+redirectprinters:i:1        # Enable printer redirection
+redirectclipboard:i:1       # Enable clipboard sharing
+redirectdrives:i:0          # Disable drive redirection (security)
+redirectsmartcards:i:0      # Disable smart card redirection
+redirectposdevices:i:0      # Disable POS device redirection
+```
+
+**Security consideration:** Drive redirection is disabled by default to prevent data exfiltration.
+
+### Session Timeout
+
+```rdp
+session timeout:i:14400         # 240 minutes (private mode)
+autoreconnection enabled:i:1    # Auto-reconnect on disconnect
+```
+
+Timeout is calculated based on session mode:
+
+```javascript
+const sessionTimeout = isPrivate ? 240 : 20;  // Minutes
+`session timeout:i:${sessionTimeout * 60}`     // Convert to seconds
+```
+
+See [Session Modes](/features/session-modes) for details.
+
+### Performance Optimization
+
+```rdp
+compression:i:1                  # Enable RDP compression
+bitmapcachepersistenable:i:1     # Cache bitmaps to disk
+disable wallpaper:i:0            # Allow wallpaper
+allow font smoothing:i:0         # Disable font smoothing (performance)
+allow desktop composition:i:0    # Disable Aero (performance)
+disable full window drag:i:1     # Show window outline when dragging
+disable menu anims:i:1           # Disable menu animations
+```
+
+**Performance vs. experience tradeoff:**
+- Desktop composition and font smoothing improve appearance but use bandwidth
+- Disable for slow connections
+- Enable for LAN connections
+
+## API Endpoint
+
+The frontend requests RDP files via:
+
+```http
+GET /api/rdp/app/:alias
+Cookie: rdweb_token=eyJhbGc...
+```
+
+**Example request:**
+
+```http
+GET /api/rdp/app/MSWORD
+Cookie: rdweb_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Response:**
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/x-rdp
+Content-Disposition: attachment; filename="Microsoft Word 2019.rdp"
+
+screen mode id:i:1
+full address:s:SRV-APPS.LAB-MH.LOCAL
+...
+```
+
+The browser automatically downloads the file, which the user can open with their RDP client.
+
+## Client Compatibility
+
+### Windows
+
+**Microsoft Remote Desktop Connection (mstsc.exe)**
+- Built into Windows
+- Full support for all RDP features
+- Double-click `.rdp` file to launch
+
+### macOS
+
+**Microsoft Remote Desktop (App Store)**
+- Download from Mac App Store
+- Supports RemoteApps and RD Gateway
+- Import `.rdp` files via File > Import
+
+### Linux
+
+**FreeRDP**
+```bash
+# Install
+sudo apt install freerdp2-x11
+
+# Launch RDP file
+xfreerdp /v:SRV-APPS.LAB-MH.LOCAL /u:LAB-MH\\juan.perez /app:||MSWORD
+```
+
+**Remmina**
+- GUI RDP client for Linux
+- Import RDP files via File > Import
+
+### iOS/Android
+
+**Microsoft Remote Desktop (Mobile)**
+- Available on App Store and Google Play
+- Limited RemoteApp support (varies by version)
+- Better for desktop sessions
+
+## Security Considerations
+
+### Network Level Authentication (NLA)
+
+```rdp
+authentication level:i:3
+```
+
+NLA provides:
+- Authentication before session establishment
+- Protection against man-in-the-middle attacks
+- Reduced server load from unauthenticated connections
+
+**Always use level 3 in production.**
+
+### RD Gateway
+
+Using an RD Gateway:
+- Encrypts all traffic over HTTPS (TLS)
+- Eliminates need to expose RDP port 3389
+- Provides centralized access control
+- Enables multifactor authentication
+
+### Credential Handling
+
+```rdp
+username:s:LAB-MH\juan.perez
+promptcredentialonce:i:0
+```
+
+- Username is pre-filled (convenience)
+- Password is **never** included in RDP file
+- User must enter password when launching
+- Credentials can be saved by RDP client (user choice)
+
+### Drive Redirection
+
+```rdp
+redirectdrives:i:0  # Disabled for security
+```
+
+Disabling drive redirection:
+- Prevents data exfiltration from client to server
+- Reduces attack surface
+- Recommended for public/untrusted devices
+
+Enable only when necessary and with proper data loss prevention (DLP) controls.
+
+## Troubleshooting
+
+### Connection Fails
+
+**Check:**
+1. Server address: `full address:s:SRV-APPS.LAB-MH.LOCAL`
+2. Gateway hostname: `gatewayhostname:s:rdgateway.lab-mh.local`
+3. Network connectivity to gateway
+4. Firewall allows HTTPS (443) to gateway
+
+### Authentication Errors
+
+**Common issues:**
+- Wrong username format (should be `DOMAIN\username`)
+- User not authorized for RemoteApp collection
+- NLA not enabled on RD Session Host
+
+### RemoteApp Not Found
+
+**Verify:**
+```rdp
+remoteapplicationprogram:s:||MSWORD
+```
+
+Ensure:
+- Application is published with correct alias
+- User has permission to access the app
+- Collection name matches RDCB configuration
+
+### Session Timeout
+
+If sessions disconnect too quickly:
+```rdp
+session timeout:i:1200  # 20 minutes = 1200 seconds
+```
+
+Check:
+- RDP file timeout value
+- Server-side timeout policies (GPO)
+- Idle timeout vs. session timeout
+
+## Advanced Customization
+
+### Command-Line Arguments
+
+Pass arguments to RemoteApps:
+
+```javascript
+remoteapplicationcmdline:s:C:\\Documents\\report.docx
+```
+
+Example: Open Word with specific document.
+
+### Multi-Monitor Support
+
+```rdp
+use multimon:i:1              # Enable multi-monitor
+span monitors:i:1             # Span across monitors
+```
+
+### USB Redirection
+
+```rdp
+usbdevicestoredirect:s:*      # Redirect all USB devices
+```
+
+Requires:
+- Windows Server 2012 R2 or later
+- RemoteFX USB Redirection enabled
+
+## Configuration Reference
+
+RDP generation is configured via environment variables:
+
+```bash
+# RD Connection Broker
+RDCB_SERVER=SRV-APPS.LAB-MH.LOCAL
+
+# RD Gateway
+RDGATEWAY_HOSTNAME=rdgateway.lab-mh.local
+
+# Active Directory
+AD_DOMAIN=LAB-MH
+```
+
+## Next Steps
+
+- Learn about [Session Modes](/features/session-modes) and timeout behavior
+- Understand [Authentication](/features/authentication) and user credentials
+- Explore the [RemoteApp Catalog](/features/remoteapp-catalog) system

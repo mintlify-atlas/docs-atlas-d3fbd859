@@ -1,0 +1,132 @@
+---
+title: Introduction
+description: A modern, responsive replacement for legacy RD Web Access built with Angular and Express.js
+---
+
+## What is RDSWeb Custom?
+
+RDSWeb Custom is a modern web portal for accessing Remote Desktop Services (RDS) applications and desktops. It's designed as a complete replacement for the legacy Microsoft RD Web Access interface, offering a contemporary user experience while maintaining full compatibility with your existing RDS infrastructure.
+
+Built with Angular 21 and Express.js, RDSWeb Custom provides a fast, responsive single-page application that connects directly to your Active Directory and RD Connection Broker.
+
+## Why Replace RD Web Access?
+
+The legacy RD Web Access interface has several limitations:
+
+- **Outdated UI**: Built with legacy ASP.NET technologies and Internet Explorer-era design patterns
+- **Poor mobile support**: Not responsive, difficult to use on tablets and smartphones
+- **Limited customization**: Hard to brand or modify to match your organization's needs
+- **No modern auth flows**: Lacks support for modern authentication patterns and session management
+
+RDSWeb Custom addresses all of these issues while maintaining seamless integration with your existing RDS deployment.
+
+## Key Benefits
+
+<CardGroup cols={2}>
+  <Card title="Modern Interface" icon="browser">
+    Clean, responsive UI built with Angular Material that works on any device
+  </Card>
+  <Card title="Active Directory Integration" icon="users">
+    Native LDAP/AD authentication with automatic user and group resolution
+  </Card>
+  <Card title="Easy Deployment" icon="rocket">
+    Simple setup with environment-based configuration and optional simulation mode
+  </Card>
+  <Card title="Secure by Default" icon="shield">
+    JWT-based sessions, HTTP-only cookies, and Helmet.js security headers
+  </Card>
+</CardGroup>
+
+## Architecture Overview
+
+RDSWeb Custom is a two-tier application:
+
+### Backend (Express.js API)
+
+The backend provides a REST API that handles:
+
+- **Authentication**: LDAP/AD authentication with JWT token generation
+- **RemoteApp Catalog**: Retrieves available applications from RD Connection Broker
+- **RDP Generation**: Creates dynamic .rdp files with user-specific configurations
+- **Session Management**: Cookie-based authentication with configurable timeouts
+
+Key API endpoints:
+
+- `POST /api/auth/login` - Authenticate users against Active Directory
+- `GET /api/apps` - Retrieve RemoteApps and desktops for the authenticated user
+- `POST /api/launch/:appId` - Generate and download an .rdp file
+
+### Frontend (Angular 21 SPA)
+
+The frontend is a modern single-page application featuring:
+
+- **Responsive design** with Angular Material components
+- **Authentication flow** with login, session management, and logout
+- **Application catalog** displaying available RemoteApps and desktops
+- **One-click launch** that downloads pre-configured .rdp files
+
+## Core Features
+
+### Active Directory Authentication
+
+Authenticate users directly against your domain controller using LDAP. The system validates credentials, retrieves user information (display name, email, groups), and issues a secure JWT token.
+
+### RemoteApp Catalog
+
+Automatically discovers and displays RemoteApps published through your RD Connection Broker. Users see only the applications they have permissions to access based on their AD group memberships.
+
+### Dynamic RDP File Generation
+
+Generates .rdp files on-demand with:
+
+- Pre-populated username in `DOMAIN\username` format
+- RD Gateway configuration
+- Session timeout settings (20 minutes standard, 240 minutes private mode)
+- Resource redirection (clipboard, printers)
+- Connection Broker server address
+
+### Simulation Mode
+
+For development and testing, RDSWeb Custom includes a simulation mode that works without requiring actual AD or RDCB infrastructure. This allows you to:
+
+- Test the UI and user flows
+- Develop new features without production dependencies
+- Demo the system without infrastructure access
+
+## Technology Stack
+
+**Backend:**
+- Express.js 4.x
+- jsonwebtoken for JWT handling
+- activedirectory2 and ldapts for AD/LDAP integration
+- Helmet.js for security headers
+- dotenv for configuration management
+
+**Frontend:**
+- Angular 21.2 with standalone components
+- Angular Material 21.2 for UI components
+- RxJS for reactive programming
+- TypeScript 5.9
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Enterprise RemoteApp Portal">
+    Replace your legacy RD Web Access with a modern interface that users can access from any device. Maintain your existing RDS infrastructure while providing a significantly better user experience.
+  </Accordion>
+  <Accordion title="BYOD and Remote Work">
+    Enable employees to access corporate applications from personal devices through a secure, web-based portal. The responsive design works seamlessly on laptops, tablets, and smartphones.
+  </Accordion>
+  <Accordion title="Multi-tenant Service Providers">
+    Customize the branding and configuration for different customers while maintaining a single codebase. The modular architecture makes it easy to adapt to different deployment scenarios.
+  </Accordion>
+  <Accordion title="Development and Testing">
+    Use simulation mode to test RDS workflows and develop custom features without requiring full infrastructure. Perfect for development teams and proof-of-concept deployments.
+  </Accordion>
+</AccordionGroup>
+
+## What's Next?
+
+Ready to get started? Head over to the [Quick Start](/quickstart) guide to set up RDSWeb Custom in your environment.
+
+For detailed configuration options and deployment strategies, check out the Configuration and Deployment sections.

@@ -1,0 +1,560 @@
+---
+title: 'Configuration Reference'
+description: 'Complete reference for all environment variables and configuration options'
+---
+
+## Overview
+
+RDSWeb Custom is configured via environment variables defined in a `.env` file in the backend directory. All configuration is loaded through `backend/src/config.js` which reads from environment variables with sensible defaults.
+
+<Info>
+  Copy `backend/.env.example` to `backend/.env` and customize for your environment.
+</Info>
+
+---
+
+## Server Configuration
+
+These variables control the Express server settings.
+
+<ParamField path="PORT" type="number" default="3000">
+  The TCP port the backend API server listens on.
+  
+  **Example:**
+  ```bash
+  PORT=3000
+  ```
+  
+  <Note>
+    In production with a reverse proxy, keep this on localhost-only port. The reverse proxy will handle public HTTPS traffic.
+  </Note>
+</ParamField>
+
+<ParamField path="NODE_ENV" type="string" default="development">
+  The Node.js environment mode. Set to `production` for production deployments.
+  
+  **Allowed values:**
+  - `development` - Enables debug features and verbose logging
+  - `production` - Optimizes performance and disables debug output
+  
+  **Example:**
+  ```bash
+  NODE_ENV=production
+  ```
+  
+  <Warning>
+    Always set `NODE_ENV=production` in production to disable debug features and improve performance.
+  </Warning>
+</ParamField>
+
+---
+
+## JWT Configuration
+
+JSON Web Tokens (JWT) are used for session authentication after successful LDAP login.
+
+<ParamField path="JWT_SECRET" type="string" default="dev_secret_insecure_change_in_production" required>
+  The secret key used to sign and verify JWT tokens. This **must** be changed in production.
+  
+  **Example:**
+  ```bash
+  JWT_SECRET=a3f8d9c2e1b4f6a8c9d2e5f7a1b3c4d6e8f9a0b2c3d4e5f6a7b8c9d0e1f2a3b4
+  ```
+  
+  **Generate a secure secret:**
+  ```bash
+  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  ```
+  
+  <Warning>
+    **Security Critical**: Use a strong random string (minimum 32 characters). Never use the default value in production. Compromising this secret allows attackers to forge authentication tokens.
+  </Warning>
+</ParamField>
+
+<ParamField path="JWT_EXPIRES_IN" type="string" default="8h">
+  The duration a JWT token remains valid before users must re-authenticate.
+  
+  **Format:** Use time notation like `1h`, `30m`, `7d`, etc.
+  
+  **Example:**
+  ```bash
+  JWT_EXPIRES_IN=8h
+  ```
+  
+  **Common values:**
+  - `1h` - 1 hour (high security environments)
+  - `8h` - 8 hours (standard work day)
+  - `24h` - 24 hours (convenience)
+  - `7d` - 7 days (not recommended for production)
+</ParamField>
+
+---
+
+## Active Directory / LDAP Configuration
+
+These settings configure authentication against Active Directory via LDAP.
+
+<ParamField path="LDAP_URL" type="string" default="ldap://dc01.lab-mh.local" required>
+  The LDAP or LDAPS URL of your Domain Controller.
+  
+  **Format:**
+  - `ldap://hostname:389` - Plain LDAP (not recommended for production)
+  - `ldaps://hostname:636` - LDAP over SSL/TLS (recommended)
+  
+  **Examples:**
+  ```bash
+  # Development (plain LDAP)
+  LDAP_URL=ldap://dc01.company.local
+  
+  # Production (LDAPS with SSL)
+  LDAP_URL=ldaps://dc01.company.local:636
+  ```
+  
+  <Warning>
+    **Production:** Always use LDAPS (`ldaps://`) to encrypt credentials in transit. Plain LDAP sends passwords in cleartext over the network.
+  </Warning>
+</ParamField>
+
+<ParamField path="LDAP_BASE_DN" type="string" default="DC=lab-mh,DC=local" required>
+  The base Distinguished Name (DN) for LDAP searches in your Active Directory domain.
+  
+  **Format:** `DC=domain,DC=tld`
+  
+  **Examples:**
+  ```bash
+  LDAP_BASE_DN=DC=company,DC=local
+  LDAP_BASE_DN=DC=subdomain,DC=company,DC=com
+  ```
+  
+  <Note>
+    This should match your Active Directory domain structure. For domain `company.local`, use `DC=company,DC=local`.
+  </Note>
+</ParamField>
+
+<ParamField path="AD_DOMAIN" type="string" default="LAB-MH" required>
+  The NetBIOS domain name (short domain name) prepended to usernames during authentication.
+  
+  **Format:** `DOMAIN\username`
+  
+  **Examples:**
+  ```bash
+  AD_DOMAIN=COMPANY
+  AD_DOMAIN=CORP
+  ```
+  
+  <Info>
+    This is the short domain name users see at Windows login (e.g., `COMPANY\jdoe`). You can find it in Active Directory Domains and Trusts.
+  </Info>
+</ParamField>
+
+<ParamField path="AD_SERVICE_USER" type="string" default="svc-rdsweb@lab-mh.local" required>
+  The service account used for LDAP queries to retrieve user information and group memberships.
+  
+  **Formats:**
+  - UPN format: `username@domain.local` (recommended)
+  - DN format: `CN=svc-rdsweb,OU=Service Accounts,DC=company,DC=local`
+  
+  **Examples:**
+  ```bash
+  AD_SERVICE_USER=svc-rdsweb@company.local
+  AD_SERVICE_USER=CN=svc-rdsweb,OU=Service Accounts,DC=company,DC=local
+  ```
+  
+  **Permissions Required:**
+  - Read access to user and group objects in Active Directory
+  - No administrative privileges needed
+  
+  <Warning>
+    Use a dedicated service account with minimal permissions. Do not use a user account or domain admin.
+  </Warning>
+</ParamField>
+
+<ParamField path="AD_SERVICE_PASS" type="string" default="" required>
+  The password for the AD service account.
+  
+  **Example:**
+  ```bash
+  AD_SERVICE_PASS=SecureP@ssw0rd123!
+  ```
+  
+  <Warning>
+    **Security Critical**: 
+    - Never commit this password to version control
+    - Use a strong password (12+ characters, mixed case, numbers, symbols)
+    - Consider using environment-specific secrets management (Azure Key Vault, AWS Secrets Manager, etc.)
+    - Rotate this password regularly
+  </Warning>
+</ParamField>
+
+---
+
+## RD Connection Broker Configuration
+
+These settings configure connectivity to the Remote Desktop Connection Broker.
+
+<ParamField path="RDCB_SERVER" type="string" default="SRV-APPS.LAB-MH.LOCAL" required>
+  The hostname or FQDN of the RD Connection Broker server.
+  
+  **Examples:**
+  ```bash
+  RDCB_SERVER=rdcb.company.local
+  RDCB_SERVER=SRV-RDCB01.COMPANY.LOCAL
+  ```
+  
+  **Requirements:**
+  - The backend server must have network access to this server
+  - WMI access must be enabled (for querying published applications)
+  - Hostname must be resolvable via DNS
+  
+  <Note>
+    The backend queries this server via PowerShell/WMI to retrieve the list of published RemoteApps available to users. See `backend/src/services/rdcbService.js:85-94` for implementation details.
+  </Note>
+</ParamField>
+
+---
+
+## RD Gateway Configuration
+
+Optional configuration for Remote Desktop Gateway.
+
+<ParamField path="RDGATEWAY_HOSTNAME" type="string" default="rdgateway.lab-mh.local">
+  The hostname of the RD Gateway server to include in generated RDP files.
+  
+  **Examples:**
+  ```bash
+  RDGATEWAY_HOSTNAME=rdgateway.company.local
+  RDGATEWAY_HOSTNAME=remote.company.com
+  ```
+  
+  **When to use:**
+  - Users connect from outside the corporate network
+  - You want to tunnel RDP connections through HTTPS (port 443)
+  - You need additional security and authentication layers
+  
+  <Info>
+    If configured, the generated RDP files will include `gatewayhostname:s:{RDGATEWAY_HOSTNAME}` to route connections through the RD Gateway.
+  </Info>
+</ParamField>
+
+---
+
+## Simulation Mode
+
+Simulation mode allows testing the application without real Active Directory or RD Connection Broker infrastructure.
+
+<ParamField path="SIMULATION_MODE" type="boolean" default="false">
+  Enable or disable simulation mode. When `true`, the application uses mock data instead of real AD/RDCB queries.
+  
+  **Values:**
+  - `true` - Enable simulation mode (for development/testing)
+  - `false` - Use real AD and RD Connection Broker (production)
+  
+  **Example:**
+  ```bash
+  # Development
+  SIMULATION_MODE=true
+  
+  # Production
+  SIMULATION_MODE=false
+  ```
+  
+  **What gets simulated:**
+  - Authentication (accepts any username/password)
+  - LDAP queries (returns mock user data)
+  - RemoteApp list (returns hardcoded applications)
+  
+  <Warning>
+    **Never enable simulation mode in production.** This disables all authentication and allows anyone to log in.
+  </Warning>
+</ParamField>
+
+<ParamField path="SIMULATION_USER" type="string" default="administrador">
+  The default username returned in simulation mode.
+  
+  **Example:**
+  ```bash
+  SIMULATION_USER=testuser
+  ```
+  
+  <Note>
+    Only used when `SIMULATION_MODE=true`. This is the username shown after simulated login.
+  </Note>
+</ParamField>
+
+<ParamField path="SIMULATION_PASS" type="string" default="Admin1234!">
+  The default password accepted in simulation mode.
+  
+  **Example:**
+  ```bash
+  SIMULATION_PASS=test1234
+  ```
+  
+  <Note>
+    Only used when `SIMULATION_MODE=true`. Any username/password combination will be accepted, but this is the suggested credential.
+  </Note>
+</ParamField>
+
+---
+
+## Frontend Configuration
+
+The Angular frontend has its own configuration in `frontend/src/environments/`.
+
+### Development Environment
+
+**File:** `frontend/src/environments/environment.ts`
+
+```typescript
+export const environment = {
+    production: false,
+    apiUrl: '/api',   // Uses Angular proxy to localhost:3000
+};
+```
+
+**Proxy Configuration:** `frontend/proxy.conf.json`
+
+```json
+{
+  "/api": {
+    "target": "http://localhost:3000",
+    "secure": false
+  }
+}
+```
+
+### Production Environment
+
+**File:** `frontend/src/environments/environment.prod.ts`
+
+```typescript
+export const environment = {
+    production: true,
+    apiUrl: 'https://rdsweb.company.local/api',  // Public-facing URL
+};
+```
+
+<Warning>
+  Update `apiUrl` in `environment.prod.ts` to match your production domain before building the frontend.
+</Warning>
+
+---
+
+## CORS Configuration
+
+CORS (Cross-Origin Resource Sharing) is configured in `backend/src/index.js:19-26`.
+
+**Default configuration:**
+
+```javascript
+app.use(
+    cors({
+        origin: ['http://localhost:4200', 'http://localhost:4300'],
+        credentials: true,
+        methods: ['GET', 'POST', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+    })
+);
+```
+
+**For production:**
+
+Update the `origin` array to include your production domain:
+
+```javascript
+origin: ['https://rdsweb.company.local'],
+```
+
+<Warning>
+  **Security:** Never use `origin: '*'` in production. This allows any website to make requests to your API.
+</Warning>
+
+---
+
+## Example Production Configuration
+
+Here's a complete example `.env` file for production:
+
+```bash .env
+# ============================================================
+#  RDSWeb Custom - Production Configuration
+# ============================================================
+
+# --- Server ---
+PORT=3000
+NODE_ENV=production
+
+# --- JWT (CHANGE THESE!) ---
+JWT_SECRET=a3f8d9c2e1b4f6a8c9d2e5f7a1b3c4d6e8f9a0b2c3d4e5f6a7b8c9d0e1f2a3b4
+JWT_EXPIRES_IN=8h
+
+# --- Active Directory ---
+LDAP_URL=ldaps://dc01.company.local:636
+LDAP_BASE_DN=DC=company,DC=local
+AD_DOMAIN=COMPANY
+
+# --- AD Service Account ---
+AD_SERVICE_USER=svc-rdsweb@company.local
+AD_SERVICE_PASS=SecureP@ssw0rd123!
+
+# --- RD Connection Broker ---
+RDCB_SERVER=rdcb.company.local
+
+# --- RD Gateway (Optional) ---
+RDGATEWAY_HOSTNAME=rdgateway.company.local
+
+# --- Disable Simulation ---
+SIMULATION_MODE=false
+```
+
+---
+
+## Configuration Loading
+
+The application loads configuration using the following priority:
+
+1. **Environment variables** - Highest priority
+2. **`.env` file** - Loaded via `dotenv` package
+3. **Default values** - Defined in `backend/src/config.js`
+
+**Loading process (`backend/src/config.js:1`):**
+
+```javascript
+require('dotenv').config();  // Loads .env file into process.env
+
+module.exports = {
+    port: parseInt(process.env.PORT) || 3000,
+    nodeEnv: process.env.NODE_ENV || 'development',
+    // ...
+};
+```
+
+<Tip>
+  You can override any `.env` setting by setting the environment variable directly (useful for containerized deployments).
+</Tip>
+
+---
+
+## Verifying Configuration
+
+Test your configuration with the health check endpoint:
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "simulationMode": false,
+  "rdcbServer": "rdcb.company.local",
+  "timestamp": "2026-03-04T10:30:00.000Z"
+}
+```
+
+Verify:
+- `simulationMode` is `false` in production
+- `rdcbServer` matches your `RDCB_SERVER` setting
+- `status` is `"ok"`
+
+---
+
+## Security Best Practices
+
+<AccordionGroup>
+  <Accordion title="Protect Sensitive Variables">
+    - Never commit `.env` to version control (add to `.gitignore`)
+    - Use secrets management (Azure Key Vault, AWS Secrets Manager, HashiCorp Vault)
+    - Rotate `AD_SERVICE_PASS` and `JWT_SECRET` regularly
+    - Use environment-specific configurations (dev, staging, prod)
+  </Accordion>
+  
+  <Accordion title="Use Secure Protocols">
+    - Always use LDAPS (`ldaps://`) in production
+    - Enable HTTPS on the frontend (via reverse proxy)
+    - Use TLS 1.2+ for all encrypted connections
+    - Disable insecure ciphers and protocols
+  </Accordion>
+  
+  <Accordion title="Principle of Least Privilege">
+    - Service account should have read-only AD access
+    - Don't use domain admin or privileged accounts
+    - Limit network access to required ports only
+    - Run backend service as non-root/non-admin user
+  </Accordion>
+  
+  <Accordion title="Monitor and Audit">
+    - Enable application logging
+    - Monitor failed login attempts
+    - Set up alerts for configuration changes
+    - Review AD service account activity regularly
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Authentication Failures">
+    **Symptoms:** Users cannot log in, LDAP errors in logs
+    
+    **Check:**
+    - `LDAP_URL` is correct and reachable (test with `ldp.exe` or `ldapsearch`)
+    - `AD_SERVICE_USER` and `AD_SERVICE_PASS` are correct
+    - `LDAP_BASE_DN` matches your domain structure
+    - Firewall allows LDAP/LDAPS traffic (ports 389/636)
+    - Service account is not locked or expired
+  </Accordion>
+  
+  <Accordion title="No RemoteApps Appearing">
+    **Symptoms:** User logs in successfully but no applications are shown
+    
+    **Check:**
+    - `RDCB_SERVER` is correct and reachable
+    - Backend server can query WMI on the RD Connection Broker
+    - Published RemoteApps exist and are available to the user
+    - Check backend logs for PowerShell/WMI errors
+    - Verify simulation mode is disabled (`SIMULATION_MODE=false`)
+  </Accordion>
+  
+  <Accordion title="CORS Errors in Browser">
+    **Symptoms:** API requests fail with CORS errors in browser console
+    
+    **Check:**
+    - Frontend `apiUrl` matches the backend URL
+    - CORS `origin` in `backend/src/index.js` includes your frontend domain
+    - `credentials: true` is set in CORS configuration
+    - Reverse proxy is forwarding headers correctly
+  </Accordion>
+  
+  <Accordion title="JWT Token Issues">
+    **Symptoms:** Users logged out unexpectedly, "invalid token" errors
+    
+    **Check:**
+    - `JWT_SECRET` is consistent across backend restarts
+    - `JWT_EXPIRES_IN` is not too short
+    - System clock is synchronized (JWT expiry is time-based)
+    - Cookies are enabled in the browser
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="System Requirements" icon="list-check" href="/deployment/requirements">
+    Infrastructure prerequisites and compatibility
+  </Card>
+  <Card title="Installation Guide" icon="rocket" href="/deployment/installation">
+    Step-by-step deployment instructions
+  </Card>
+  <Card title="Quick Start Guide" icon="code" href="/quickstart">
+    Set up local development environment
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/auth/login">
+    Backend API endpoints documentation
+  </Card>
+</CardGroup>

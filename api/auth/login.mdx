@@ -1,0 +1,172 @@
+---
+title: 'POST /api/auth/login'
+description: 'Authenticate a user with Active Directory credentials and establish a session'
+---
+
+## Endpoint
+
+```
+POST /api/auth/login
+```
+
+Authenticates a user against Active Directory using their username and password. Upon successful authentication, the API creates a JWT token containing user information and sets it as an HTTP-only cookie.
+
+## Request Body
+
+<ParamField body="username" type="string" required>
+  The Active Directory username (will be trimmed of whitespace)
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The user's password
+</ParamField>
+
+<ParamField body="privateMode" type="boolean" default="false">
+  When enabled, extends session timeout from 20 minutes to 240 minutes (4 hours)
+</ParamField>
+
+## Response
+
+<ResponseField name="ok" type="boolean">
+  Indicates successful authentication
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  Authenticated user information
+  
+  <ResponseField name="username" type="string">
+    The user's Active Directory username
+  </ResponseField>
+  
+  <ResponseField name="displayName" type="string">
+    The user's full display name from AD
+  </ResponseField>
+  
+  <ResponseField name="email" type="string">
+    The user's email address
+  </ResponseField>
+  
+  <ResponseField name="domain" type="string">
+    The Active Directory domain
+  </ResponseField>
+  
+  <ResponseField name="initials" type="string">
+    User's initials derived from display name (first two words, first letter each)
+  </ResponseField>
+</ResponseField>
+
+## Authentication Cookie
+
+On successful login, the server sets an `rdweb_token` cookie with the following properties:
+
+- **Name**: `rdweb_token`
+- **Type**: JWT (JSON Web Token)
+- **HttpOnly**: `true` (not accessible via JavaScript)
+- **Secure**: `true` in production
+- **SameSite**: `lax`
+- **Max-Age**: 
+  - 20 minutes (1,200,000ms) - default mode
+  - 240 minutes (14,400,000ms) - private mode
+- **Path**: `/`
+
+### JWT Payload
+
+The JWT token contains:
+
+```json
+{
+  "username": "string",
+  "displayName": "string",
+  "email": "string",
+  "domain": "string",
+  "groups": ["string"],
+  "privateMode": boolean,
+  "exp": number,
+  "iat": number
+}
+```
+
+## Example Request
+
+```bash
+curl -X POST https://your-domain.com/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "jdoe",
+    "password": "SecurePassword123",
+    "privateMode": false
+  }' \
+  -c cookies.txt
+```
+
+## Example Response
+
+### Success (200 OK)
+
+```json
+{
+  "ok": true,
+  "user": {
+    "username": "jdoe",
+    "displayName": "John Doe",
+    "email": "jdoe@company.com",
+    "domain": "COMPANY",
+    "initials": "JD"
+  }
+}
+```
+
+### Error Responses
+
+#### Missing Fields (400 Bad Request)
+
+Returned when `username` or `password` is missing from the request body.
+
+```json
+{
+  "error": "Usuario y contraseña son requeridos",
+  "code": "MISSING_FIELDS"
+}
+```
+
+#### Invalid Credentials (401 Unauthorized)
+
+Returned when the username or password is incorrect.
+
+```json
+{
+  "error": "Credenciales incorrectas. Verifica tu usuario y contraseña.",
+  "code": "INVALID_CREDENTIALS"
+}
+```
+
+#### Internal Server Error (500)
+
+Returned when an unexpected error occurs during authentication.
+
+```json
+{
+  "error": "Error interno del servidor",
+  "code": "INTERNAL_ERROR"
+}
+```
+
+## Error Codes
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `MISSING_FIELDS` | 400 | Username or password not provided |
+| `INVALID_CREDENTIALS` | 401 | Authentication failed - incorrect username or password |
+| `INTERNAL_ERROR` | 500 | Unexpected server error during authentication |
+
+## Implementation Notes
+
+- The username is automatically trimmed of leading/trailing whitespace
+- Authentication is performed against Active Directory via the `adService`
+- User groups from AD are included in the JWT but not returned in the response
+- The `privateMode` flag affects session duration but is stored in the JWT for reference
+- Session timeout is enforced via cookie expiration and JWT `exp` claim
+
+## Source Code Reference
+
+Implementation: `backend/src/routes/auth.js:14-55`

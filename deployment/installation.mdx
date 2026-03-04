@@ -1,0 +1,481 @@
+---
+title: 'Installation Guide'
+description: 'Step-by-step instructions for installing RDSWeb Custom in production'
+---
+
+## Overview
+
+This guide walks through the complete installation process for deploying RDSWeb Custom in a production environment. The installation consists of two main components:
+
+1. **Backend API** - Node.js/Express server for authentication and RemoteApp queries
+2. **Frontend Application** - Angular-based web interface
+
+<Info>
+  Before starting, ensure you have completed all items in the [System Requirements](/deployment/requirements) checklist.
+</Info>
+
+## Installation Methods
+
+<CardGroup cols={2}>
+  <Card title="Manual Installation" icon="terminal">
+    Install and configure components manually on a Windows or Linux server
+  </Card>
+  <Card title="Production Deployment" icon="server">
+    Deploy with a reverse proxy (nginx/IIS) for SSL termination and production hosting
+  </Card>
+</CardGroup>
+
+---
+
+## Manual Installation
+
+### Step 1: Clone the Repository
+
+Download the source code to your server:
+
+```bash
+git clone https://github.com/your-org/rdsweb-custom.git
+cd rdsweb-custom
+```
+
+<Note>
+  Replace `your-org/rdsweb-custom` with the actual repository URL.
+</Note>
+
+### Step 2: Install Backend Dependencies
+
+Navigate to the backend directory and install npm packages:
+
+```bash
+cd backend
+npm install
+```
+
+**Expected output:**
+```
+added 150 packages in 8s
+```
+
+Verify the installation:
+
+```bash
+node --version  # Should show v16.x or later
+npm --version   # Should show v7.x or later
+```
+
+### Step 3: Configure Backend Environment
+
+Create the production environment configuration:
+
+```bash
+cp .env.example .env
+```
+
+Edit the `.env` file with your production settings:
+
+```bash .env
+# Server Configuration
+PORT=3000
+NODE_ENV=production
+
+# JWT Configuration
+JWT_SECRET=your-secure-random-secret-here-change-this
+JWT_EXPIRES_IN=8h
+
+# Active Directory Configuration
+LDAP_URL=ldaps://dc01.company.local:636
+LDAP_BASE_DN=DC=company,DC=local
+AD_DOMAIN=COMPANY
+
+# AD Service Account
+AD_SERVICE_USER=svc-rdsweb@company.local
+AD_SERVICE_PASS=SecurePassword123!
+
+# RD Connection Broker
+RDCB_SERVER=rdcb.company.local
+
+# RD Gateway (optional)
+RDGATEWAY_HOSTNAME=rdgateway.company.local
+
+# Disable simulation mode for production
+SIMULATION_MODE=false
+```
+
+<Warning>
+  **Security Critical**: 
+  - Change `JWT_SECRET` to a strong random string (32+ characters)
+  - Use LDAPS (`ldaps://`) instead of plain LDAP in production
+  - Never commit the `.env` file to version control
+</Warning>
+
+**Generate a secure JWT secret:**
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+See the [Configuration Reference](/deployment/configuration) for detailed descriptions of all environment variables.
+
+### Step 4: Test Backend Server
+
+Start the backend in development mode to verify configuration:
+
+```bash
+node src/index.js
+```
+
+**Expected output:**
+```
+  ╔══════════════════════════════════════╗
+  ║       RDWeb-Moderno  Backend         ║
+  ║   Servidor en puerto 3000            ║
+  ║   Modo: PRODUCCIÓN 🟢                ║
+  ║   RDCB: rdcb.company.local           ║
+  ╚══════════════════════════════════════╝
+
+  API Health: http://localhost:3000/api/health
+```
+
+Test the health endpoint:
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+**Expected response:**
+```json
+{
+  "status": "ok",
+  "simulationMode": false,
+  "rdcbServer": "rdcb.company.local",
+  "timestamp": "2026-03-04T10:30:00.000Z"
+}
+```
+
+<Accordion title="Troubleshooting Backend Startup">
+  **Common Issues:**
+  
+  - **LDAP connection errors**: Verify `LDAP_URL` is accessible and service account credentials are correct
+  - **Port already in use**: Change `PORT` in `.env` or stop conflicting process
+  - **Module not found errors**: Run `npm install` again
+  - **PowerShell/WMI errors**: Ensure server can access RD Connection Broker via WMI
+</Accordion>
+
+### Step 5: Install Frontend Dependencies
+
+Open a new terminal and navigate to the frontend directory:
+
+```bash
+cd frontend
+npm install
+```
+
+**Expected output:**
+```
+added 1200+ packages in 45s
+```
+
+### Step 6: Configure Frontend Environment
+
+Update the production API URL in `src/environments/environment.prod.ts`:
+
+```typescript src/environments/environment.prod.ts
+export const environment = {
+    production: true,
+    apiUrl: 'https://rdsweb.company.local/api',  // Update with your domain
+};
+```
+
+<Note>
+  If using a reverse proxy, set `apiUrl` to the public-facing URL where the backend will be accessible.
+</Note>
+
+### Step 7: Build Frontend for Production
+
+Compile the Angular application for production:
+
+```bash
+ng build --configuration production
+```
+
+**Expected output:**
+```
+Building Angular application...
+✔ Browser application bundle generation complete.
+✔ Copying assets complete.
+✔ Index html generation complete.
+
+Output location: dist/frontend
+```
+
+The compiled application will be in `dist/frontend/browser/`.
+
+---
+
+## Production Deployment
+
+### Option A: Deploy with nginx (Linux)
+
+#### 1. Install nginx
+
+```bash
+sudo apt update
+sudo apt install nginx
+```
+
+#### 2. Copy Frontend Build
+
+```bash
+sudo mkdir -p /var/www/rdsweb
+sudo cp -r dist/frontend/browser/* /var/www/rdsweb/
+sudo chown -R www-data:www-data /var/www/rdsweb
+```
+
+#### 3. Configure nginx
+
+Create `/etc/nginx/sites-available/rdsweb`:
+
+```nginx /etc/nginx/sites-available/rdsweb
+server {
+    listen 80;
+    server_name rdsweb.company.local;
+
+    # Redirect HTTP to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name rdsweb.company.local;
+
+    # SSL Configuration
+    ssl_certificate /etc/ssl/certs/rdsweb.crt;
+    ssl_certificate_key /etc/ssl/private/rdsweb.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    # Frontend static files
+    root /var/www/rdsweb;
+    index index.html;
+
+    # Frontend routing
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Backend API proxy
+    location /api/ {
+        proxy_pass http://localhost:3000/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+#### 4. Enable Site and Reload nginx
+
+```bash
+sudo ln -s /etc/nginx/sites-available/rdsweb /etc/nginx/sites-enabled/
+sudo nginx -t  # Test configuration
+sudo systemctl reload nginx
+```
+
+### Option B: Deploy with IIS (Windows)
+
+#### 1. Install IIS and Required Modules
+
+- Install **Internet Information Services (IIS)** via Server Manager
+- Install **URL Rewrite Module**: https://www.iis.net/downloads/microsoft/url-rewrite
+- Install **Application Request Routing (ARR)**: https://www.iis.net/downloads/microsoft/application-request-routing
+
+#### 2. Configure IIS Site
+
+1. Open **IIS Manager**
+2. Right-click **Sites** → **Add Website**
+   - **Site name**: RDSWeb Custom
+   - **Physical path**: `C:\inetpub\rdsweb` (copy frontend build here)
+   - **Binding**: HTTPS, port 443
+   - **SSL certificate**: Select your certificate
+
+#### 3. Configure URL Rewrite for API Proxy
+
+Create `web.config` in the site root:
+
+```xml web.config
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <system.webServer>
+    <rewrite>
+      <rules>
+        <!-- Proxy API requests to backend -->
+        <rule name="API Proxy" stopProcessing="true">
+          <match url="^api/(.*)" />
+          <action type="Rewrite" url="http://localhost:3000/api/{R:1}" />
+        </rule>
+        
+        <!-- Angular routing -->
+        <rule name="Angular Routes" stopProcessing="true">
+          <match url=".*" />
+          <conditions logicalGrouping="MatchAll">
+            <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
+            <add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" />
+          </conditions>
+          <action type="Rewrite" url="/index.html" />
+        </rule>
+      </rules>
+    </rewrite>
+  </system.webServer>
+</configuration>
+```
+
+### Running Backend as a Service
+
+#### Linux (systemd)
+
+Create `/etc/systemd/system/rdsweb-backend.service`:
+
+```ini
+[Unit]
+Description=RDSWeb Custom Backend API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/rdsweb/backend
+Environment="NODE_ENV=production"
+ExecStart=/usr/bin/node src/index.js
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable rdsweb-backend
+sudo systemctl start rdsweb-backend
+sudo systemctl status rdsweb-backend
+```
+
+#### Windows (NSSM)
+
+1. Download **NSSM** (Non-Sucking Service Manager): https://nssm.cc/download
+2. Install the backend as a Windows service:
+
+```cmd
+nssm install RDSWebBackend "C:\Program Files\nodejs\node.exe" "C:\inetpub\rdsweb-backend\src\index.js"
+nssm set RDSWebBackend AppDirectory "C:\inetpub\rdsweb-backend"
+nssm set RDSWebBackend DisplayName "RDSWeb Custom Backend"
+nssm set RDSWebBackend Start SERVICE_AUTO_START
+net start RDSWebBackend
+```
+
+---
+
+## Post-Installation Steps
+
+### 1. Verify Installation
+
+Test the complete stack:
+
+<Steps>
+  <Step title="Access the web interface">
+    Navigate to `https://rdsweb.company.local` in a browser
+  </Step>
+  <Step title="Test authentication">
+    Log in with an Active Directory user account
+  </Step>
+  <Step title="Verify RemoteApps appear">
+    Confirm published applications are listed after login
+  </Step>
+  <Step title="Launch a RemoteApp">
+    Click an application to generate and download the RDP file
+  </Step>
+</Steps>
+
+### 2. Configure Firewall
+
+Ensure the following ports are accessible:
+
+```bash
+# Linux (ufw)
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+
+# Windows (PowerShell)
+New-NetFirewallRule -DisplayName "RDSWeb HTTPS" -Direction Inbound -Protocol TCP -LocalPort 443 -Action Allow
+```
+
+### 3. Enable Logging
+
+Configure application logging for troubleshooting:
+
+```javascript backend/src/index.js
+// Add logging middleware (optional)
+const morgan = require('morgan');
+app.use(morgan('combined'));
+```
+
+### 4. Set Up Monitoring
+
+Monitor the backend service:
+
+```bash
+# Check service status
+sudo systemctl status rdsweb-backend
+
+# View logs
+sudo journalctl -u rdsweb-backend -f
+```
+
+---
+
+## Security Hardening
+
+<Warning>
+  Apply these security measures before exposing the application to users.
+</Warning>
+
+### SSL/TLS Configuration
+
+- Use certificates from a trusted Certificate Authority
+- Enable TLS 1.2+ only (disable TLS 1.0/1.1)
+- Configure strong cipher suites
+- Enable HSTS (HTTP Strict Transport Security)
+
+### Application Security
+
+- Change `JWT_SECRET` to a cryptographically random string
+- Use LDAPS (port 636) instead of plain LDAP
+- Set `NODE_ENV=production` to disable debug features
+- Implement rate limiting on `/api/auth/login` endpoint
+- Configure CORS to only allow your domain
+
+### Network Security
+
+- Restrict backend port 3000 to localhost only (not exposed publicly)
+- Use a reverse proxy (nginx/IIS) for SSL termination
+- Configure firewall rules to limit access to trusted networks
+- Use RD Gateway for external RemoteApp access
+
+---
+
+## Next Steps
+
+<Card title="Configuration Reference" icon="gear" href="/deployment/configuration">
+  Learn about all available environment variables and advanced configuration options
+</Card>
+
+<Card title="Quick Start Guide" icon="code" href="/quickstart">
+  Set up a local development environment for customizing RDSWeb Custom
+</Card>

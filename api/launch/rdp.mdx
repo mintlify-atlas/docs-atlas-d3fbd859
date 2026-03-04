@@ -1,0 +1,211 @@
+---
+title: 'Launch RDP Session'
+api: 'GET /api/launch/:alias'
+description: 'Generate and download an RDP file for launching a RemoteApp or Remote Desktop session'
+---
+
+Generates a customized RDP (Remote Desktop Protocol) file for the specified application or desktop session and returns it as a downloadable file. The RDP file is pre-configured with the user's credentials, gateway settings, and session parameters.
+
+## Authentication
+
+This endpoint requires authentication. Include the session cookie (`authToken`) in the request.
+
+## Path Parameters
+
+<ParamField path="alias" type="string" required>
+  The unique identifier (alias) of the application or desktop to launch. This must match the `alias` field from the `/api/apps` response (e.g., "MSWORD", "CHROME", "DESKTOP_DEFAULT").
+  
+  The alias is case-insensitive.
+</ParamField>
+
+## Response
+
+On success, this endpoint returns an RDP file with the following headers:
+
+- **Content-Type**: `application/x-rdp`
+- **Content-Disposition**: `attachment; filename="{alias}.rdp"`
+- **Cache-Control**: `no-store`
+
+The response body contains the RDP file content in plain text format.
+
+## RDP File Contents
+
+The generated RDP file includes the following configuration:
+
+### For RemoteApp Applications
+
+```text
+remoteapplicationmode:i:1
+remoteapplicationname:s:{Application Name}
+remoteapplicationprogram:s:{rdpPath}
+alternate shell:s:{rdpPath}
+full address:s:{remoteServer}
+prompt for credentials:i:0
+username:s:{domain}\{username}
+authentication level:i:0
+gatewayusagemethod:i:1
+gatewayhostname:s:{gatewayServer}
+gatewayprofileusagemethod:i:1
+public mode:i:{0 or 1}
+```
+
+### For Remote Desktop Sessions
+
+```text
+screen mode id:i:2
+full address:s:{remoteServer}
+prompt for credentials:i:0
+username:s:{domain}\{username}
+authentication level:i:0
+gatewayusagemethod:i:1
+gatewayhostname:s:{gatewayServer}
+gatewayprofileusagemethod:i:1
+public mode:i:{0 or 1}
+```
+
+<Info>
+  The `public mode:i:{0 or 1}` parameter is determined by the user's `privateMode` setting:
+  - `0` = Private mode (4-hour sessions)
+  - `1` = Public mode (20-minute sessions)
+</Info>
+
+<RequestExample>
+
+```bash cURL
+curl --request GET \
+  --url https://your-server.com/api/launch/MSWORD \
+  --cookie "authToken=your_session_token" \
+  --output msword.rdp
+```
+
+```javascript JavaScript
+// Download RDP file using fetch
+fetch('https://your-server.com/api/launch/MSWORD', {
+  method: 'GET',
+  credentials: 'include'
+})
+.then(response => response.blob())
+.then(blob => {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'msword.rdp';
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+});
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://your-server.com/api/launch/MSWORD',
+    cookies={'authToken': 'your_session_token'}
+)
+
+if response.status_code == 200:
+    with open('msword.rdp', 'wb') as f:
+        f.write(response.content)
+    print('RDP file downloaded successfully')
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```text Success Response (RDP File)
+remoteapplicationmode:i:1
+remoteapplicationname:s:Microsoft Word 2019
+remoteapplicationprogram:s:||MSWORD
+alternate shell:s:||MSWORD
+full address:s:rdcb.yourdomain.local
+prompt for credentials:i:0
+username:s:YOURDOMAIN\jdoe
+authentication level:i:0
+gatewayusagemethod:i:1
+gatewayhostname:s:gateway.yourdomain.com
+gatewayprofileusagemethod:i:1
+public mode:i:0
+```
+
+```json Error Response (404)
+{
+  "error": "Aplicación no encontrada",
+  "code": "APP_NOT_FOUND"
+}
+```
+
+```json Error Response (500)
+{
+  "error": "Error generando el archivo RDP",
+  "code": "RDP_ERROR"
+}
+```
+
+</ResponseExample>
+
+## Error Codes
+
+<ResponseField name="error" type="string">
+  Error message describing what went wrong.
+</ResponseField>
+
+<ResponseField name="code" type="string">
+  Error code for programmatic handling.
+</ResponseField>
+
+| Status Code | Code | Description |
+|-------------|------|-------------|
+| 401 | AUTH_REQUIRED | User is not authenticated. Authentication cookie is missing or invalid. |
+| 404 | APP_NOT_FOUND | The specified application alias does not exist or the user does not have permission to access it. |
+| 500 | RDP_ERROR | Failed to generate the RDP file. This may indicate issues with the RDCB service or internal server errors. |
+
+## How It Works
+
+1. **Validate Authentication**: The middleware verifies the user's session cookie and extracts user information.
+
+2. **Fetch Available Resources**: The endpoint queries the RD Connection Broker to get the list of apps and desktops available to the user.
+
+3. **Lookup Resource**: The system searches for a resource matching the provided alias (case-insensitive).
+
+4. **Determine Resource Type**: 
+   - If `rdpPath` is `null`, it's a Remote Desktop session
+   - If `rdpPath` has a value, it's a RemoteApp application
+
+5. **Generate RDP File**: The appropriate RDP generator function is called:
+   - `generateRemoteAppRdp()` for applications
+   - `generateDesktopRdp()` for desktop sessions
+
+6. **Return File**: The RDP content is returned with appropriate headers to trigger a browser download.
+
+## Session Modes
+
+The `privateMode` user setting affects the RDP file generation:
+
+<Tabs>
+  <Tab title="Private Mode">
+    **Default for trusted devices**
+    
+    - Longer session timeout (4 hours)
+    - RDP parameter: `public mode:i:0`
+    - Recommended for personal computers and trusted environments
+  </Tab>
+  
+  <Tab title="Public Mode">
+    **For shared or untrusted devices**
+    
+    - Shorter session timeout (20 minutes)
+    - RDP parameter: `public mode:i:1`
+    - Forces session cleanup for security
+    - Recommended for kiosks and public computers
+  </Tab>
+</Tabs>
+
+<Warning>
+  The generated RDP file contains the user's domain and username but not their password. The Remote Desktop client will use Windows integrated authentication or prompt for credentials as needed.
+</Warning>
+
+<Tip>
+  To test this endpoint without a full RDS infrastructure, enable simulation mode in the backend configuration. This will generate RDP files with simulated data.
+</Tip>

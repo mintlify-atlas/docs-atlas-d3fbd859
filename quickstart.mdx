@@ -1,80 +1,358 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Get RDSWeb Custom up and running in minutes with this step-by-step guide
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
+Before you begin, ensure you have:
 
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+- **Node.js** 18.x or higher (the backend requires Node.js)
+- **npm** 11.x or higher (comes with Node.js)
+- **Git** for cloning the repository
+- **Active Directory** domain controller (optional if using simulation mode)
+- **RD Connection Broker** (optional if using simulation mode)
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  **New to RDS?** You can start with simulation mode to explore the interface without requiring AD or RDCB infrastructure.
 </Note>
+
+## Installation
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the RDSWeb Custom source code to your local machine:
+
+    ```bash
+    git clone <your-repository-url>
+    cd rdsweb-custom
+    ```
+  </Step>
+
+  <Step title="Install backend dependencies">
+    Navigate to the backend directory and install dependencies:
+
+    ```bash
+    cd backend
+    npm install
+    ```
+
+    This installs the required packages including Express.js, JWT libraries, and AD authentication modules.
+  </Step>
+
+  <Step title="Configure the backend">
+    Copy the example environment file and customize it for your environment:
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    Edit `.env` with your configuration:
+
+    ```bash backend/.env
+    # Server Configuration
+    PORT=3000
+    NODE_ENV=development
+
+    # JWT Settings
+    JWT_SECRET=your_very_long_random_secret_here
+    JWT_EXPIRES_IN=8h
+
+    # Active Directory Configuration
+    LDAP_URL=ldap://dc01.yourdomain.local
+    LDAP_BASE_DN=DC=yourdomain,DC=local
+    AD_DOMAIN=YOURDOMAIN
+
+    # Service Account (read-only permissions)
+    AD_SERVICE_USER=svc-rdweb@yourdomain.local
+    AD_SERVICE_PASS=YourServiceAccountPassword
+
+    # RD Connection Broker
+    RDCB_SERVER=rdcb.yourdomain.local
+
+    # RD Gateway
+    RDGATEWAY_HOSTNAME=rdgateway.yourdomain.local
+
+    # Simulation Mode (set to false for production)
+    SIMULATION_MODE=true
+    SIMULATION_USER=testuser
+    SIMULATION_PASS=TestPass123!
+    ```
+
+    <Warning>
+      **Security**: Never commit the `.env` file to version control. It contains sensitive credentials.
+    </Warning>
+  </Step>
+
+  <Step title="Start the backend server">
+    Launch the Express.js API server:
+
+    ```bash
+    npm start
+    ```
+
+    For development with auto-reload:
+
+    ```bash
+    npm run dev
+    ```
+
+    You should see output indicating the server is running:
+
+    ```
+    ╔══════════════════════════════════════╗
+    ║       RDWeb-Moderno  Backend         ║
+    ║   Servidor en puerto 3000            ║
+    ║   Modo: SIMULACIÓN 🟡                ║
+    ║   RDCB: SRV-APPS.LAB-MH.LOCAL        ║
+    ╚══════════════════════════════════════╝
+
+    API Health: http://localhost:3000/api/health
+    ```
+  </Step>
+
+  <Step title="Install frontend dependencies">
+    Open a new terminal, navigate to the frontend directory, and install dependencies:
+
+    ```bash
+    cd frontend
+    npm install
+    ```
+
+    This installs Angular 21, Angular Material, and all required dependencies.
+  </Step>
+
+  <Step title="Start the frontend development server">
+    Launch the Angular development server:
+
+    ```bash
+    npm start
+    ```
+
+    Or explicitly with Angular CLI:
+
+    ```bash
+    ng serve
+    ```
+
+    The frontend will be available at `http://localhost:4200`
+  </Step>
+
+  <Step title="Access the application">
+    Open your browser and navigate to:
+
+    ```
+    http://localhost:4200
+    ```
+
+    If using simulation mode, log in with:
+    - **Username**: The value of `SIMULATION_USER` from your `.env` file
+    - **Password**: The value of `SIMULATION_PASS` from your `.env` file
+  </Step>
+</Steps>
+
+## Verify Installation
+
+Once both servers are running, verify everything is working:
+
+### Check Backend Health
+
+Visit the health check endpoint:
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+You should receive a response like:
+
+```json
+{
+  "status": "ok",
+  "simulationMode": true,
+  "rdcbServer": "SRV-APPS.LAB-MH.LOCAL",
+  "timestamp": "2026-03-04T10:30:00.000Z"
+}
+```
+
+### Test Authentication
+
+Test the login endpoint (simulation mode):
+
+```bash
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "testuser",
+    "password": "TestPass123!",
+    "privateMode": false
+  }'
+```
+
+Successful authentication returns user details and sets an HTTP-only cookie.
+
+## Configuration Options
+
+### Simulation vs. Production Mode
+
+<Tabs>
+  <Tab title="Simulation Mode">
+    **Use for**: Development, testing, demos
+
+    ```bash
+    SIMULATION_MODE=true
+    SIMULATION_USER=testuser
+    SIMULATION_PASS=TestPass123!
+    ```
+
+    In simulation mode:
+    - No Active Directory connection required
+    - No RD Connection Broker required
+    - Returns mock RemoteApp data
+    - Perfect for frontend development and testing
+  </Tab>
+  <Tab title="Production Mode">
+    **Use for**: Live deployment with real infrastructure
+
+    ```bash
+    SIMULATION_MODE=false
+    LDAP_URL=ldap://dc01.yourdomain.local
+    LDAP_BASE_DN=DC=yourdomain,DC=local
+    AD_DOMAIN=YOURDOMAIN
+    AD_SERVICE_USER=svc-rdweb@yourdomain.local
+    AD_SERVICE_PASS=YourServiceAccountPassword
+    RDCB_SERVER=rdcb.yourdomain.local
+    ```
+
+    In production mode:
+    - Authenticates against Active Directory
+    - Retrieves real RemoteApp catalog from RDCB
+    - Generates functional .rdp files
+    - Requires proper network access to AD and RDCB
+  </Tab>
+</Tabs>
+
+### Session Timeout Settings
+
+The application supports two session modes:
+
+- **Standard Mode**: 20-minute session timeout
+- **Private Mode**: 240-minute (4-hour) session timeout
+
+Users can select private mode during login. This setting affects:
+- JWT token expiration (`backend/src/routes/auth.js:30`)
+- Cookie max-age (`backend/src/routes/auth.js:35`)
+- RDP session timeout (`backend/src/services/rdpService.js:14`)
+
+### CORS Configuration
+
+By default, the backend accepts requests from:
+
+- `http://localhost:4200` (Angular default port)
+- `http://localhost:4300` (alternative port)
+
+To add additional origins, edit `backend/src/index.js:21`:
+
+```javascript
+cors({
+    origin: ['http://localhost:4200', 'https://rdweb.yourdomain.com'],
+    credentials: true,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+})
+```
+
+## Building for Production
+
+### Backend
+
+The backend runs directly with Node.js:
+
+```bash
+cd backend
+NODE_ENV=production npm start
+```
+
+For production deployments, consider:
+- Using a process manager like PM2 or systemd
+- Running behind a reverse proxy (nginx, Apache)
+- Enabling HTTPS with proper certificates
+
+### Frontend
+
+Build the Angular application for production:
+
+```bash
+cd frontend
+npm run build
+```
+
+This creates optimized static files in `frontend/dist/`. Serve these files with:
+- Nginx or Apache
+- Azure Static Web Apps
+- AWS S3 + CloudFront
+- Any static hosting service
+
+<Note>
+  **API Endpoint**: Update the frontend's API endpoint configuration in `frontend/src/environments/environment.prod.ts` to point to your production backend URL.
+</Note>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Backend won't start - LDAP connection error">
+    If you see LDAP connection errors:
+
+    1. Verify your Domain Controller is reachable: `ping dc01.yourdomain.local`
+    2. Check LDAP port is open: `telnet dc01.yourdomain.local 389`
+    3. Verify service account credentials in `.env`
+    4. Temporarily enable `SIMULATION_MODE=true` to isolate the issue
+  </Accordion>
+
+  <Accordion title="Frontend can't connect to backend">
+    If you see CORS or connection errors:
+
+    1. Verify backend is running: `curl http://localhost:3000/api/health`
+    2. Check the frontend API URL in `frontend/src/environments/environment.ts`
+    3. Ensure CORS origins in `backend/src/index.js` include your frontend URL
+    4. Check browser console for specific error messages
+  </Accordion>
+
+  <Accordion title="Authentication works but no apps appear">
+    If users can log in but see no RemoteApps:
+
+    1. Verify `RDCB_SERVER` in `.env` points to your Connection Broker
+    2. Check network connectivity to the RDCB server
+    3. Ensure the user has RemoteApp permissions in AD groups
+    4. Review backend logs for RDCB connection errors
+    5. Test with `SIMULATION_MODE=true` to see mock apps
+  </Accordion>
+
+  <Accordion title="RDP files download but don't connect">
+    If .rdp files are generated but fail to connect:
+
+    1. Open the .rdp file in a text editor and verify server addresses
+    2. Check `RDGATEWAY_HOSTNAME` is correct and reachable
+    3. Ensure RD Gateway is properly configured
+    4. Verify the user has permissions to access the RemoteApp
+    5. Test connectivity to the RD Gateway: `telnet rdgateway.yourdomain.local 443`
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+Now that you have RDSWeb Custom running:
+
+<CardGroup cols={2}>
+  <Card title="Configure Active Directory" icon="key" href="/admin/active-directory">
+    Set up AD service accounts and group permissions
+  </Card>
+  <Card title="Learn About Features" icon="star" href="/features/authentication">
+    Explore authentication, RemoteApp catalog, and more
+  </Card>
+  <Card title="Deploy to Production" icon="server" href="/deployment/installation">
+    Learn how to deploy securely to your environment
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/auth/login">
+    Explore the backend API endpoints
+  </Card>
+</CardGroup>

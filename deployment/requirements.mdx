@@ -1,0 +1,217 @@
+---
+title: 'System Requirements'
+description: 'Infrastructure prerequisites for deploying RDSWeb Custom'
+---
+
+## Overview
+
+RDSWeb Custom is a modern replacement for Microsoft Remote Desktop Web Access (RD Web Access) that provides a web-based interface for accessing RemoteApp and Desktop Connection resources. This page outlines the infrastructure and system requirements needed for a production deployment.
+
+## Infrastructure Prerequisites
+
+### Active Directory Domain
+
+<Card title="Active Directory Domain Services" icon="sitemap">
+  A functioning Active Directory domain is required for user authentication and group-based application access control.
+</Card>
+
+**Requirements:**
+- Active Directory Domain Services (AD DS)
+- At least one Domain Controller accessible via LDAP
+- Service account with read permissions on the directory
+- User accounts configured in AD for authentication
+
+### Remote Desktop Services Infrastructure
+
+<Card title="RD Connection Broker" icon="server">
+  RDSWeb Custom queries the RD Connection Broker to retrieve available RemoteApps and desktop sessions.
+</Card>
+
+**Required Components:**
+- **RD Connection Broker** - Manages RemoteApp and Desktop Connection resources
+- **RD Session Host(s)** - Hosts RemoteApp applications and desktop sessions
+- **RD Gateway** (optional but recommended) - Provides secure external access via HTTPS
+- **RD Licensing Server** - Provides RDS CALs for user connections
+
+**Network Requirements:**
+- Server running RDSWeb Custom must have network access to the RD Connection Broker
+- WMI access to the RD Connection Broker (for querying published applications)
+- Users must have network access to RD Session Hosts (directly or via RD Gateway)
+
+### Server Requirements
+
+<CardGroup cols={2}>
+  <Card title="Operating System" icon="windows">
+    - Windows Server 2016 or later (for PowerShell/WMI access to RDCB)
+    - Or Linux server with network access to Windows infrastructure
+  </Card>
+  
+  <Card title="Node.js Runtime" icon="node-js">
+    - Node.js 16.x or later (tested with Node.js 24.x)
+    - npm 7.x or later
+  </Card>
+</CardGroup>
+
+**Hardware Recommendations:**
+- **CPU**: 2+ cores
+- **RAM**: 2GB minimum, 4GB recommended
+- **Disk**: 10GB free space (for application and logs)
+- **Network**: 100 Mbps+ network interface
+
+<Note>
+  The backend requires PowerShell access to query the RD Connection Broker via WMI. If deploying on Linux, you'll need to use simulation mode or implement custom integration.
+</Note>
+
+## Network & Firewall Requirements
+
+### Required Network Ports
+
+| Port | Protocol | Source | Destination | Purpose |
+|------|----------|--------|-------------|----------|
+| 3000 | TCP | Client browsers | RDSWeb Backend | API endpoints (configurable) |
+| 4200 | TCP | Client browsers | RDSWeb Frontend | Angular dev server (development only) |
+| 389 | TCP/UDP | RDSWeb Backend | Domain Controller | LDAP authentication |
+| 636 | TCP | RDSWeb Backend | Domain Controller | LDAPS (recommended for production) |
+| 3389 | TCP | Client browsers | RD Session Host | Remote Desktop connections |
+| 443 | TCP | Client browsers | RD Gateway | Secure RDP over HTTPS (if using RD Gateway) |
+| * | WMI | RDSWeb Backend | RD Connection Broker | Query published applications |
+
+<Warning>
+  For production deployments, always use LDAPS (port 636) instead of plain LDAP (port 389) to encrypt credentials in transit.
+</Warning>
+
+### DNS Requirements
+
+- Hostname resolution for Domain Controllers
+- Hostname resolution for RD Connection Broker
+- Hostname resolution for RD Gateway (if configured)
+- Optionally, a custom DNS name for the RDSWeb Custom application
+
+## Software Dependencies
+
+### Backend Dependencies
+
+The backend requires the following npm packages (automatically installed via `npm install`):
+
+```json
+"dependencies": {
+  "activedirectory2": "^2.2.0",      // Active Directory integration
+  "cookie-parser": "^1.4.7",        // Cookie handling
+  "cors": "^2.8.5",                  // Cross-Origin Resource Sharing
+  "dotenv": "^16.4.5",               // Environment variable management
+  "express": "^4.19.2",              // Web framework
+  "helmet": "^7.1.0",                // Security headers
+  "jsonwebtoken": "^9.0.2",          // JWT authentication
+  "ldap-authentication": "^4.0.3",   // LDAP authentication
+  "ldapts": "^7.0.10"                // LDAP client
+}
+```
+
+### Frontend Dependencies
+
+The Angular frontend requires:
+
+```json
+"dependencies": {
+  "@angular/core": "^21.2.0",        // Angular framework
+  "@angular/material": "~21.2.0",   // Material Design components
+  "@angular/cdk": "~21.2.0",         // Component Dev Kit
+  "rxjs": "~7.8.0",                  // Reactive programming
+  "tslib": "^2.3.0"                  // TypeScript runtime
+}
+```
+
+**Build Tools:**
+- Angular CLI 21.2.0 or later
+- TypeScript 5.9.2 or later
+- npm 11.9.0 or later (specified in package.json)
+
+## Security Requirements
+
+### Service Account Permissions
+
+<Card title="AD Service Account" icon="user-lock">
+  Create a dedicated service account in Active Directory for LDAP queries. This account should have:
+</Card>
+
+- **Read permissions** on user and group objects in AD
+- **No administrative privileges** required
+- **Password that does not expire** (or implement password rotation)
+- Member of **Domain Users** group (minimum)
+
+**Recommended OU Structure:**
+```
+DC=example,DC=com
+└── OU=Service Accounts
+    └── CN=svc-rdsweb
+```
+
+### SSL/TLS Certificates
+
+For production deployments:
+
+- Use a reverse proxy (nginx, Apache, IIS) with SSL/TLS termination
+- Configure HTTPS for the frontend application
+- Use valid certificates from a trusted CA (not self-signed)
+- Enable LDAPS (LDAP over SSL) for Active Directory authentication
+
+## Browser Requirements
+
+### Supported Browsers
+
+<CardGroup cols={3}>
+  <Card title="Chrome" icon="chrome">
+    Version 90+
+  </Card>
+  <Card title="Edge" icon="edge">
+    Version 90+ (Chromium)
+  </Card>
+  <Card title="Firefox" icon="firefox">
+    Version 88+
+  </Card>
+</CardGroup>
+
+**Requirements:**
+- Modern browser with ES2020+ JavaScript support
+- Cookies enabled (for JWT session tokens)
+- RDP client support (built-in or via browser extension)
+
+### Client RDP Software
+
+Users need one of the following to launch RemoteApp connections:
+
+- **Windows**: Built-in Remote Desktop Connection (mstsc.exe)
+- **macOS**: Microsoft Remote Desktop from App Store
+- **Linux**: Remmina, FreeRDP, or similar RDP client
+- **Web**: RD Web Client (if configured separately)
+
+## Pre-Installation Checklist
+
+Before proceeding to installation, verify:
+
+<Steps>
+  <Step title="Active Directory is accessible">
+    Confirm LDAP connectivity to Domain Controller on port 389 or 636
+  </Step>
+  <Step title="RD Connection Broker is configured">
+    Verify published RemoteApps are available via PowerShell/WMI
+  </Step>
+  <Step title="Service account created">
+    Create AD service account with read permissions (e.g., svc-rdsweb@domain.com)
+  </Step>
+  <Step title="Node.js installed">
+    Install Node.js 16+ and npm on the server
+  </Step>
+  <Step title="Firewall rules configured">
+    Open required ports (3000 for backend, LDAP 389/636, RDP 3389)
+  </Step>
+  <Step title="DNS resolution working">
+    Test hostname resolution for DC, RDCB, and RD Gateway
+  </Step>
+</Steps>
+
+## Next Steps
+
+<Card title="Ready to Install?" icon="rocket" href="/deployment/installation">
+  Continue to the Installation Guide to deploy RDSWeb Custom
+</Card>

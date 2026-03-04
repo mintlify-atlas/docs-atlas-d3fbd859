@@ -1,0 +1,377 @@
+---
+title: Simulation Mode
+description: Use simulation mode for development and testing without Active Directory or RD Connection Broker
+---
+
+## Overview
+
+**Simulation Mode** allows you to run RDSWeb Custom without requiring:
+- An Active Directory domain controller
+- An RD Connection Broker server
+- Real RemoteApp publications
+
+This is ideal for:
+- Local development
+- CI/CD testing
+- Demos and proof-of-concept environments
+- Frontend UI development
+
+## Enabling Simulation Mode
+
+Set this in your `.env` file:
+
+```bash
+SIMULATION_MODE=true
+```
+
+<Warning>
+**Never enable simulation mode in production!** This bypasses all Active Directory authentication.
+</Warning>
+
+## How It Works
+
+When simulation mode is enabled:
+
+1. **Authentication**: Uses hardcoded test users instead of AD (see `backend/src/services/adService.js:5-22`)
+2. **Applications**: Returns a static list of RemoteApps (see `backend/src/services/rdcbService.js:4-54`)
+3. **No External Dependencies**: No LDAP or WMI queries are executed
+
+## Simulated Users
+
+Two test users are available in simulation mode:
+
+### Administrator User
+
+```javascript
+{
+  username: 'administrador',
+  password: 'Admin1234!',
+  displayName: 'Administrador',
+  email: 'admin@lab-mh.local',
+  domain: 'LAB-MH',
+  groups: ['RemoteApp Users', 'Domain Admins']
+}
+```
+
+### Standard User
+
+```javascript
+{
+  username: 'juan.perez',
+  password: 'Usuario1234!',
+  displayName: 'Juan Pérez',
+  email: 'juan.perez@lab-mh.local',
+  domain: 'LAB-MH',
+  groups: ['RemoteApp Users']
+}
+```
+
+## Simulated Applications
+
+The following RemoteApps are returned in simulation mode:
+
+<AccordionGroup>
+  <Accordion title="Microsoft Office Apps">
+    - **Microsoft Word 2019** (`MSWORD`)
+    - **Microsoft Excel 2019** (`MSEXCEL`)
+    - **Microsoft PowerPoint 2019** (`MSPOWERPOINT`)
+  </Accordion>
+  
+  <Accordion title="Developer Tools">
+    - **Notepad++** (`NOTEPADPP`)
+  </Accordion>
+  
+  <Accordion title="Browsers">
+    - **Google Chrome** (`CHROME`)
+  </Accordion>
+  
+  <Accordion title="Business Applications">
+    - **Sistema ERP** (`ERP`)
+  </Accordion>
+</AccordionGroup>
+
+### Application Data Structure
+
+Each simulated app includes:
+
+```javascript
+{
+  alias: 'MSWORD',              // Unique identifier
+  name: 'Microsoft Word 2019',  // Display name
+  rdpPath: '||MSWORD',          // RDP launch path
+  iconIndex: 0,                 // Icon index
+  remoteServer: 'SRV-APPS.LAB-MH.LOCAL',  // RDCB server
+  folderName: 'Microsoft Office'  // Category folder
+}
+```
+
+## Simulated Desktops
+
+One desktop resource is available:
+
+```javascript
+{
+  alias: 'DESKTOP_DEFAULT',
+  name: 'Escritorio Remoto',
+  rdpPath: null,  // Full desktop session
+  remoteServer: 'SRV-APPS.LAB-MH.LOCAL',
+  folderName: 'Escritorios'
+}
+```
+
+## Configuration
+
+You can customize the simulated user credentials in `.env`:
+
+```bash
+SIMULATION_MODE=true
+SIMULATION_USER=administrador
+SIMULATION_PASS=Admin1234!
+```
+
+<Info>
+These settings define the **default** simulated user, but both hardcoded users in `adService.js` will work regardless of these values.
+</Info>
+
+## Testing with Simulation Mode
+
+### Login Test
+
+```bash
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "administrador",
+    "password": "Admin1234!"
+  }'
+```
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "user": {
+    "username": "administrador",
+    "displayName": "Administrador",
+    "email": "admin@lab-mh.local",
+    "domain": "LAB-MH",
+    "groups": ["RemoteApp Users", "Domain Admins"]
+  }
+}
+```
+
+### Get Applications
+
+```bash
+curl http://localhost:3000/api/apps \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Expected Response:**
+
+```json
+{
+  "apps": [
+    {
+      "alias": "MSWORD",
+      "name": "Microsoft Word 2019",
+      "rdpPath": "||MSWORD",
+      "folderName": "Microsoft Office"
+    }
+    // ... more apps
+  ],
+  "desktops": [
+    {
+      "alias": "DESKTOP_DEFAULT",
+      "name": "Escritorio Remoto",
+      "folderName": "Escritorios"
+    }
+  ]
+}
+```
+
+## Health Check
+
+Verify simulation mode is active:
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "simulationMode": true,
+  "rdcbServer": "SRV-APPS.LAB-MH.LOCAL",
+  "timestamp": "2026-03-04T10:30:00.000Z"
+}
+```
+
+## Adding Custom Simulated Data
+
+### Adding a User
+
+Edit `backend/src/services/adService.js` and add to the `SIMULATED_USERS` array:
+
+```javascript
+const SIMULATED_USERS = [
+    // ... existing users
+    {
+        username: 'jane.doe',
+        password: 'SecurePass123!',
+        displayName: 'Jane Doe',
+        email: 'jane.doe@lab-mh.local',
+        domain: 'LAB-MH',
+        groups: ['RemoteApp Users', 'Developers'],
+    },
+];
+```
+
+### Adding an Application
+
+Edit `backend/src/services/rdcbService.js` and add to the `SIMULATED_APPS` array:
+
+```javascript
+const SIMULATED_APPS = [
+    // ... existing apps
+    {
+        alias: 'VSCODE',
+        name: 'Visual Studio Code',
+        rdpPath: '||VSCODE',
+        iconIndex: 0,
+        remoteServer: config.rdcb.server,
+        folderName: 'Herramientas',
+    },
+];
+```
+
+### Adding a Desktop Collection
+
+Edit the `SIMULATED_DESKTOPS` array in `rdcbService.js`:
+
+```javascript
+const SIMULATED_DESKTOPS = [
+    // ... existing desktops
+    {
+        alias: 'DESKTOP_DEVELOPERS',
+        name: 'Escritorio de Desarrollo',
+        rdpPath: null,
+        remoteServer: config.rdcb.server,
+        folderName: 'Escritorios',
+    },
+];
+```
+
+## Switching Between Modes
+
+To switch from simulation to production mode:
+
+<Steps>
+  <Step title="Update .env">
+    ```bash
+    SIMULATION_MODE=false
+    ```
+  </Step>
+  
+  <Step title="Configure Real Services">
+    Ensure AD and RDCB settings are configured:
+    ```bash
+    LDAP_URL=ldap://dc01.contoso.local
+    RDCB_SERVER=rdcb.contoso.local
+    AD_SERVICE_USER=svc-rdweb@contoso.local
+    AD_SERVICE_PASS=YourPassword
+    ```
+  </Step>
+  
+  <Step title="Restart Backend">
+    ```bash
+    cd ~/workspace/source/backend
+    npm start
+    ```
+  </Step>
+  
+  <Step title="Verify Mode">
+    Check the health endpoint:
+    ```bash
+    curl http://localhost:3000/api/health
+    ```
+    Should show `"simulationMode": false`
+  </Step>
+</Steps>
+
+## Visual Indicator
+
+When the backend starts, it displays the current mode:
+
+```
+  ╔══════════════════════════════════════╗
+  ║       RDWeb-Moderno  Backend         ║
+  ║   Servidor en puerto 3000            ║
+  ║   Modo: SIMULACIÓN 🟡                ║
+  ║   RDCB: SRV-APPS.LAB-MH.LOCAL        ║
+  ╚══════════════════════════════════════╝
+```
+
+Production mode shows:
+
+```
+  ║   Modo: PRODUCCIÓN 🟢                ║
+```
+
+## CI/CD Integration
+
+For automated testing, enable simulation mode in your CI pipeline:
+
+```yaml
+# .github/workflows/test.yml
+env:
+  SIMULATION_MODE: true
+  JWT_SECRET: test_secret_for_ci
+
+steps:
+  - name: Run Backend Tests
+    run: |
+      cd backend
+      npm install
+      npm test
+```
+
+## Limitations
+
+<Warning>
+Simulation mode has these limitations:
+
+- No real RDP connections (frontend can generate RDP files, but they won't work)
+- No group-based filtering (all simulated users see all apps)
+- No password policies or account lockouts
+- No session management or token revocation
+</Warning>
+
+## Security Reminder
+
+<CardGroup cols={2}>
+  <Card title="Disable in Production" icon="ban" color="#ff0000">
+    Never use simulation mode in production environments
+  </Card>
+  
+  <Card title="No Real Auth" icon="shield-xmark" color="#ff6600">
+    Simulation mode bypasses all authentication checks
+  </Card>
+  
+  <Card title="Demo Only" icon="presentation-screen" color="#ffaa00">
+    Use only for demos, development, and testing
+  </Card>
+  
+  <Card title="Check Health Endpoint" icon="heartbeat" color="#00aa00">
+    Always verify simulation mode status before deployment
+  </Card>
+</CardGroup>
+
+## Related Pages
+
+- [Active Directory Setup](/admin/active-directory) - Configure real AD authentication
+- [RD Connection Broker](/admin/rd-connection-broker) - Configure real RDCB integration
+- [Security Best Practices](/admin/security) - Production security guidelines

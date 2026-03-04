@@ -1,0 +1,204 @@
+---
+title: Active Directory Setup
+description: Configure Active Directory integration for RDSWeb Custom authentication
+---
+
+## Overview
+
+RDSWeb Custom uses LDAP to authenticate users against your Active Directory domain. This guide covers the setup of a service account and LDAP configuration.
+
+## Service Account Requirements
+
+### Why a Service Account?
+
+The application uses a two-step authentication process:
+
+1. **Service Account Bind**: A read-only service account searches for the user in Active Directory
+2. **User Credential Validation**: The actual user credentials are validated with a direct bind
+
+This is the standard enterprise AD authentication pattern and ensures the service account has minimal privileges.
+
+### Creating the Service Account
+
+1. Open **Active Directory Users and Computers**
+2. Create a new user (e.g., `svc-rdweb`)
+3. Set a strong password that never expires
+4. Add to **Domain Users** (no elevated permissions needed)
+5. Grant **Read** permissions on the directory (default for domain users)
+
+<Warning>
+The service account should **NOT** have Domain Admin privileges. It only needs read access to query user attributes.
+</Warning>
+
+## Environment Configuration
+
+Configure these settings in your `.env` file:
+
+```bash
+# LDAP Connection
+LDAP_URL=ldap://dc01.lab-mh.local
+LDAP_BASE_DN=DC=lab-mh,DC=local
+AD_DOMAIN=LAB-MH
+
+# Service Account (read-only)
+# Format: user@domain.local or CN=user,OU=Services,DC=domain,DC=local
+AD_SERVICE_USER=svc-rdweb@lab-mh.local
+AD_SERVICE_PASS=YourSecurePassword123!
+```
+
+### Configuration Parameters
+
+<ParamField path="LDAP_URL" type="string" required>
+  LDAP server URL. Use `ldap://` for unencrypted or `ldaps://` for TLS.
+  
+  **Example**: `ldap://dc01.contoso.local`
+</ParamField>
+
+<ParamField path="LDAP_BASE_DN" type="string" required>
+  Base Distinguished Name for LDAP searches.
+  
+  **Example**: `DC=contoso,DC=local`
+</ParamField>
+
+<ParamField path="AD_DOMAIN" type="string" required>
+  NetBIOS domain name (used for user normalization).
+  
+  **Example**: `CONTOSO`
+</ParamField>
+
+<ParamField path="AD_SERVICE_USER" type="string" required>
+  Service account username. Supports multiple formats:
+  - `svc-rdweb@domain.local` (recommended)
+  - `CN=svc-rdweb,OU=Services,DC=domain,DC=local`
+  - `DOMAIN\svc-rdweb`
+</ParamField>
+
+<ParamField path="AD_SERVICE_PASS" type="string" required>
+  Service account password. Store securely and rotate regularly.
+</ParamField>
+
+## LDAP Attributes Retrieved
+
+The service queries these Active Directory attributes:
+
+- `sAMAccountName` - Username
+- `displayName` - Full name
+- `mail` - Email address
+- `userPrincipalName` - User principal name
+- `memberOf` - Group memberships
+
+These attributes are used to populate the JWT token and determine application access.
+
+## Username Formats
+
+RDSWeb Custom accepts multiple username formats:
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| UPN | `user@domain.local` | User Principal Name |
+| Down-level | `DOMAIN\user` | NetBIOS format |
+| Simple | `user` | Username only (domain from config) |
+
+All formats are normalized internally to query Active Directory correctly.
+
+## TLS/SSL Configuration
+
+For production deployments, use LDAPS (LDAP over TLS):
+
+```bash
+LDAP_URL=ldaps://dc01.contoso.local:636
+```
+
+<Warning>
+The current implementation sets `rejectUnauthorized: false` for TLS connections. In production, you should:
+
+1. Set `rejectUnauthorized: true` in `backend/src/services/adService.js:107`
+2. Install your CA certificate on the Node.js server
+3. Ensure the LDAP server certificate is valid
+</Warning>
+
+### Enabling TLS Certificate Validation
+
+Edit `backend/src/services/adService.js`:
+
+```javascript
+const adOptions = {
+    ldapOpts: {
+        url: config.ldap.url,
+        tlsOptions: { 
+            rejectUnauthorized: true,  // Change to true
+            ca: [fs.readFileSync('/path/to/ca-cert.pem')]
+        },
+    },
+    // ...
+};
+```
+
+## Testing the Connection
+
+Use the health endpoint to verify AD connectivity:
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+Then test authentication:
+
+```bash
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"user@domain.local","password":"password"}'
+```
+
+## Troubleshooting
+
+### Error: "No se pudo conectar al servidor de Active Directory"
+
+- Verify the LDAP URL is correct and reachable
+- Check firewall rules (port 389 for LDAP, 636 for LDAPS)
+- Ensure DNS resolution works for the domain controller
+
+### Error: "Credenciales incorrectas"
+
+- Verify the service account credentials in `.env`
+- Check the user exists in Active Directory
+- Ensure the user account is not locked or disabled
+
+### Error: "Usuario no encontrado en Active Directory"
+
+- Verify `LDAP_BASE_DN` is correct
+- Check the username format matches AD
+- Ensure the user is in the correct OU within the base DN
+
+## Group-Based Access Control
+
+User group memberships are extracted from the `memberOf` attribute and included in the JWT token. You can use these groups for:
+
+- Application filtering (future feature)
+- Role-based access control
+- Audit logging
+
+See `backend/src/services/adService.js:48-52` for the group extraction logic.
+
+## Security Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Strong Passwords" icon="key">
+    Use a complex password for the service account (min 20 characters)
+  </Card>
+  <Card title="Password Rotation" icon="rotate">
+    Rotate the service account password every 90 days
+  </Card>
+  <Card title="Monitor Access" icon="eye">
+    Enable AD audit logging for the service account
+  </Card>
+  <Card title="Use LDAPS" icon="lock">
+    Always use encrypted LDAPS in production
+  </Card>
+</CardGroup>
+
+## Related Pages
+
+- [Security Best Practices](/admin/security) - JWT, CORS, and HTTPS configuration
+- [RD Connection Broker](/admin/rd-connection-broker) - Configure application publishing
+- [Simulation Mode](/admin/simulation-mode) - Test without Active Directory

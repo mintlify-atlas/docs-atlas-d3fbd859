@@ -1,0 +1,119 @@
+---
+title: 'POST /api/auth/logout'
+description: 'End the current user session by clearing the authentication cookie'
+---
+
+## Endpoint
+
+```
+POST /api/auth/logout
+```
+
+Logs out the current user by clearing the `rdweb_token` authentication cookie. This endpoint does not require authentication and will succeed even if no valid session exists.
+
+## Request
+
+This endpoint does not require a request body or any parameters.
+
+## Response
+
+<ResponseField name="ok" type="boolean">
+  Always returns `true` indicating the logout operation completed successfully
+</ResponseField>
+
+## Cookie Removal
+
+The endpoint clears the `rdweb_token` cookie by setting:
+
+- **Path**: `/` (must match the path used when setting the cookie)
+- **Expiration**: Immediate (browser removes the cookie)
+
+After logout, subsequent requests to authenticated endpoints will receive a `NO_TOKEN` error.
+
+## Example Request
+
+```bash
+curl -X POST https://your-domain.com/api/auth/logout \
+  -b cookies.txt \
+  -c cookies.txt
+```
+
+## Example Response
+
+### Success (200 OK)
+
+```json
+{
+  "ok": true
+}
+```
+
+This endpoint always returns `200 OK` with `{"ok": true}`, regardless of whether a valid session existed.
+
+## Implementation Notes
+
+- No authentication is required to call this endpoint
+- The operation is idempotent - calling it multiple times has the same effect
+- Clearing the cookie happens client-side via the `Set-Cookie` header
+- The server does not maintain a session store, so no server-side cleanup is needed
+- JWT tokens are stateless, so the token itself remains valid until expiration, but becomes unusable without the cookie
+
+## Post-Logout Behavior
+
+After logout:
+
+1. The `rdweb_token` cookie is removed from the browser
+2. Requests to authenticated endpoints (like `/api/auth/me`) will fail with:
+   ```json
+   {
+     "error": "No autenticado",
+     "code": "NO_TOKEN"
+   }
+   ```
+3. The user must call `/api/auth/login` again to establish a new session
+
+## Usage Example
+
+### JavaScript (Fetch API)
+
+```javascript
+async function logout() {
+  try {
+    const response = await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include' // Important: include cookies
+    });
+    
+    const data = await response.json();
+    
+    if (data.ok) {
+      console.log('Logged out successfully');
+      // Redirect to login page
+      window.location.href = '/login';
+    }
+  } catch (error) {
+    console.error('Logout failed:', error);
+  }
+}
+```
+
+### Axios
+
+```javascript
+import axios from 'axios';
+
+axios.post('/api/auth/logout', {}, {
+  withCredentials: true
+})
+  .then(response => {
+    console.log('Logged out:', response.data);
+    // Redirect to login
+  })
+  .catch(error => {
+    console.error('Logout error:', error);
+  });
+```
+
+## Source Code Reference
+
+Implementation: `backend/src/routes/auth.js:58-61`

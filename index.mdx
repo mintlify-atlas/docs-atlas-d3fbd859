@@ -1,97 +1,193 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: RDSWeb Custom Documentation
+mode: custom
 ---
 
-## Setting up
+<div className="relative overflow-hidden bg-gradient-to-br from-[#0078D4] via-[#005A9E] to-[#003d6b] dark:from-[#005A9E] dark:via-[#003d6b] dark:to-[#002645] py-20">
+  <div className="max-w-7xl mx-auto px-6 lg:px-8">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6">
+          Modern Remote Desktop Web Portal
+        </h1>
+        <p className="text-lg sm:text-xl text-blue-100 max-w-2xl mb-8">
+          A sleek, modern replacement for RD Web Access that lets users authenticate with Active Directory and launch RemoteApp applications and Remote Desktop sessions directly from their browser.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a 
+            href="/quickstart" 
+            className="inline-flex items-center px-6 py-3 rounded-lg bg-white text-[#0078D4] font-semibold hover:bg-blue-50 transition-colors no-underline"
+          >
+            Get Started
+            <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </a>
+          <a 
+            href="/api/auth/login" 
+            className="inline-flex items-center px-6 py-3 rounded-lg border-2 border-white/30 bg-white/10 text-white font-semibold hover:bg-white/20 transition-colors no-underline"
+          >
+            API Reference
+          </a>
+        </div>
+      </div>
+      <div className="lg:col-span-5 hidden lg:flex justify-center">
+        <div className="relative w-full max-w-md">
+          <div className="absolute inset-0 bg-white/10 rounded-2xl backdrop-blur-sm"></div>
+          <div className="relative p-8">
+            <div className="bg-white/90 dark:bg-gray-900/90 rounded-xl p-6 shadow-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-[#0078D4] rounded-lg flex items-center justify-center">
+                  <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-gray-900 dark:text-white">Microsoft Word</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">Microsoft Office</div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Connected</span>
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">Click to launch RemoteApp</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+    Get started in minutes
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Set up RDSWeb Custom and start launching RemoteApp applications in three simple steps.
+  </p>
+  
+  <Steps>
+    <Step title="Deploy the application">
+      Clone the repository and set up both the backend Express.js API and the Angular frontend:
+      
+      ```bash
+      git clone https://github.com/SpecialSKG/RDSWeb-Custom.git
+      cd RDSWeb-Custom
+      ```
+      
+      Install dependencies for both frontend and backend:
+      
+      ```bash
+      cd backend && npm install
+      cd ../frontend && npm install
+      ```
+    </Step>
+    
+    <Step title="Configure Active Directory">
+      Create a `.env` file in the backend directory with your Active Directory settings:
+      
+      ```bash
+      LDAP_URL=ldap://dc01.yourdomain.local
+      LDAP_BASE_DN=DC=yourdomain,DC=local
+      AD_DOMAIN=YOURDOMAIN
+      AD_SERVICE_USER=svc-rdweb@yourdomain.local
+      AD_SERVICE_PASS=your_service_account_password
+      RDCB_SERVER=your-rdcb-server.yourdomain.local
+      JWT_SECRET=your_secure_random_secret
+      ```
+      
+      <Tip>Use a dedicated service account with read-only access to Active Directory for security.</Tip>
+    </Step>
+    
+    <Step title="Launch and access">
+      Start both the backend API and frontend application:
+      
+      ```bash
+      # Terminal 1 - Backend
+      cd backend && npm start
+      
+      # Terminal 2 - Frontend
+      cd frontend && npm start
+      ```
+      
+      Access the web portal at `http://localhost:4200` and sign in with your Active Directory credentials. Your RemoteApp catalog will load automatically.
+    </Step>
+  </Steps>
+</div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+    Explore features
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Discover what makes RDSWeb Custom the modern choice for remote application access.
+  </p>
+  
+  <CardGroup cols={2}>
+    <Card title="Active Directory Authentication" icon="shield-check" href="/features/authentication">
+      Secure JWT-based authentication with your existing Active Directory infrastructure
+    </Card>
+    <Card title="RemoteApp Catalog" icon="grid-2" href="/features/remoteapp-catalog">
+      Browse and launch published RemoteApps organized by folder categories
+    </Card>
+    <Card title="Dynamic RDP Generation" icon="file-code" href="/features/rdp-generation">
+      Automatically generate RDP files configured for your RD Gateway and connection broker
+    </Card>
+    <Card title="Session Modes" icon="clock" href="/features/session-modes">
+      Choose between private mode (4-hour sessions) and public mode (20-minute sessions)
+    </Card>
+    <Card title="RD Connection Broker" icon="server" href="/admin/rd-connection-broker">
+      Integrate with Windows Server RD Connection Broker via PowerShell/WMI
+    </Card>
+    <Card title="Simulation Mode" icon="flask" href="/admin/simulation-mode">
+      Test and develop without requiring a full RDS infrastructure
+    </Card>
+  </CardGroup>
+</div>
 
-## Make it yours
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+    API Reference
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Integrate RDSWeb Custom into your own applications using our REST API.
+  </p>
+  
+  <CardGroup cols={3}>
+    <Card title="Authentication" icon="key" href="/api/auth/login">
+      Login, logout, and session management endpoints
+    </Card>
+    <Card title="Applications" icon="window" href="/api/apps/list">
+      Retrieve user-specific RemoteApp catalogs
+    </Card>
+    <Card title="Launch" icon="rocket" href="/api/launch/rdp">
+      Generate and download RDP files
+    </Card>
+  </CardGroup>
+</div>
 
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
-
-## Create beautiful pages
-
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="bg-gradient-to-r from-[#0078D4] to-[#005A9E] dark:from-[#005A9E] dark:to-[#003d6b] rounded-2xl p-8 sm:p-12">
+    <div className="max-w-3xl">
+      <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">
+        Ready to modernize your Remote Desktop access?
+      </h2>
+      <p className="text-lg text-blue-100 mb-6">
+        Follow our deployment guide to set up RDSWeb Custom in your environment.
+      </p>
+      <a 
+        href="/deployment/requirements" 
+        className="inline-flex items-center px-6 py-3 rounded-lg bg-white text-[#0078D4] font-semibold hover:bg-blue-50 transition-colors no-underline"
+      >
+        View Deployment Guide
+        <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+        </svg>
+      </a>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,203 @@
+---
+title: 'List Applications'
+api: 'GET /api/apps'
+description: 'Retrieve the RemoteApp catalog and Remote Desktop sessions available to the authenticated user'
+---
+
+Retrieves the list of RemoteApp applications and Remote Desktop sessions that the authenticated user has permission to access. The response includes both applications organized by folder categories and available desktop sessions.
+
+## Authentication
+
+This endpoint requires authentication. Include the session cookie (`authToken`) in the request.
+
+## Response
+
+<ResponseField name="ok" type="boolean" required>
+  Indicates whether the request was successful.
+</ResponseField>
+
+<ResponseField name="apps" type="array" required>
+  Array of RemoteApp applications available to the user.
+  
+  <Expandable title="properties">
+    <ResponseField name="alias" type="string">
+      Unique identifier for the application (e.g., "MSWORD", "CHROME").
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Display name of the application (e.g., "Microsoft Word 2019").
+    </ResponseField>
+    
+    <ResponseField name="rdpPath" type="string">
+      RDP path reference for the RemoteApp, formatted as `||ALIAS`.
+    </ResponseField>
+    
+    <ResponseField name="iconIndex" type="number">
+      Icon index for displaying the application icon.
+    </ResponseField>
+    
+    <ResponseField name="remoteServer" type="string">
+      RD Connection Broker server hostname.
+    </ResponseField>
+    
+    <ResponseField name="folderName" type="string">
+      Category folder name for organizing applications (e.g., "Microsoft Office", "Herramientas").
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="desktops" type="array" required>
+  Array of Remote Desktop sessions available to the user.
+  
+  <Expandable title="properties">
+    <ResponseField name="alias" type="string">
+      Unique identifier for the desktop session (e.g., "DESKTOP_DEFAULT").
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Display name of the desktop session (e.g., "Escritorio Remoto").
+    </ResponseField>
+    
+    <ResponseField name="rdpPath" type="null">
+      Always `null` for desktop sessions to distinguish them from RemoteApps.
+    </ResponseField>
+    
+    <ResponseField name="remoteServer" type="string">
+      RD Connection Broker server hostname.
+    </ResponseField>
+    
+    <ResponseField name="folderName" type="string">
+      Category folder name, typically "Escritorios".
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl --request GET \
+  --url https://your-server.com/api/apps \
+  --cookie "authToken=your_session_token"
+```
+
+```javascript JavaScript
+fetch('https://your-server.com/api/apps', {
+  method: 'GET',
+  credentials: 'include', // Include cookies
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+.then(response => response.json())
+.then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://your-server.com/api/apps',
+    cookies={'authToken': 'your_session_token'}
+)
+
+data = response.json()
+print(data)
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json Success Response
+{
+  "ok": true,
+  "apps": [
+    {
+      "alias": "MSWORD",
+      "name": "Microsoft Word 2019",
+      "rdpPath": "||MSWORD",
+      "iconIndex": 0,
+      "remoteServer": "rdcb.yourdomain.local",
+      "folderName": "Microsoft Office"
+    },
+    {
+      "alias": "MSEXCEL",
+      "name": "Microsoft Excel 2019",
+      "rdpPath": "||MSEXCEL",
+      "iconIndex": 0,
+      "remoteServer": "rdcb.yourdomain.local",
+      "folderName": "Microsoft Office"
+    },
+    {
+      "alias": "CHROME",
+      "name": "Google Chrome",
+      "rdpPath": "||CHROME",
+      "iconIndex": 0,
+      "remoteServer": "rdcb.yourdomain.local",
+      "folderName": "Navegadores"
+    }
+  ],
+  "desktops": [
+    {
+      "alias": "DESKTOP_DEFAULT",
+      "name": "Escritorio Remoto",
+      "rdpPath": null,
+      "remoteServer": "rdcb.yourdomain.local",
+      "folderName": "Escritorios"
+    }
+  ]
+}
+```
+
+```json Error Response (503)
+{
+  "error": "No se pudo obtener el catálogo de aplicaciones",
+  "code": "RDCB_ERROR"
+}
+```
+
+</ResponseExample>
+
+## Error Codes
+
+<ResponseField name="error" type="string">
+  Error message describing what went wrong.
+</ResponseField>
+
+<ResponseField name="code" type="string">
+  Error code for programmatic handling.
+</ResponseField>
+
+| Status Code | Code | Description |
+|-------------|------|-------------|
+| 401 | AUTH_REQUIRED | User is not authenticated. Authentication cookie is missing or invalid. |
+| 503 | RDCB_ERROR | Failed to retrieve the application catalog from the RD Connection Broker. This may indicate connectivity issues with the RDCB server or WMI query failures. |
+
+## Implementation Details
+
+### Data Source
+
+**Simulation Mode**: Returns a predefined catalog of sample applications and desktops.
+
+**Production Mode**: Queries the RD Connection Broker using PowerShell and WMI:
+
+```powershell
+Get-WmiObject -Namespace "root\cimv2\TerminalServices" `
+  -Class Win32_TSPublishedApplication `
+  -ComputerName "rdcb-server" |
+  Select-Object -Property Name, Alias, VPath, IconPath, FolderName
+```
+
+### Distinguishing Apps from Desktops
+
+The `rdpPath` field is the key differentiator:
+- **RemoteApps**: Have an `rdpPath` value in the format `||ALIAS`
+- **Remote Desktops**: Have `rdpPath` set to `null`
+
+<Info>
+  The frontend uses the `folderName` field to organize applications into categories in the user interface.
+</Info>
+
+<Warning>
+  In production mode, this endpoint requires the backend server to have network access and appropriate permissions to query the RD Connection Broker via WMI.
+</Warning>
