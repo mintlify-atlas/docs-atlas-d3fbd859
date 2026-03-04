@@ -1,0 +1,98 @@
+{
+  "projectType": "saas",
+  "projectName": "RDSWeb Custom",
+  "projectDescription": "Modern web portal for launching RemoteApp applications and Remote Desktop sessions with Active Directory authentication",
+  "theme": "willow",
+  "primaryColor": "#0078D4",
+  "lightColor": "#50A0E8",
+  "darkColor": "#005A9E",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/requirements",
+              "deployment/installation",
+              "deployment/configuration"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/authentication",
+              "features/remoteapp-catalog",
+              "features/rdp-generation",
+              "features/session-modes"
+            ]
+          },
+          {
+            "group": "Administration",
+            "pages": [
+              "admin/active-directory",
+              "admin/rd-connection-broker",
+              "admin/simulation-mode",
+              "admin/security"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": [
+              "api/auth/login",
+              "api/auth/logout",
+              "api/auth/me"
+            ]
+          },
+          {
+            "group": "Applications",
+            "pages": [
+              "api/apps/list"
+            ]
+          },
+          {
+            "group": "Launch",
+            "pages": [
+              "api/launch/rdp"
+            ]
+          },
+          {
+            "group": "Health",
+            "pages": [
+              "api/health"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Active Directory authentication with JWT sessions",
+    "RemoteApp and Remote Desktop catalog browsing",
+    "Dynamic RDP file generation for seamless application launch",
+    "Private and public session modes with configurable timeouts",
+    "RD Connection Broker integration via PowerShell/WMI",
+    "Simulation mode for development and testing"
+  ],
+  "publicApiSurface": [
+    "POST /api/auth/login",
+    "POST /api/auth/logout",
+    "GET /api/auth/me",
+    "GET /api/apps",
+    "GET /api/launch/:alias",
+    "GET /api/health"
+  ]
+}
